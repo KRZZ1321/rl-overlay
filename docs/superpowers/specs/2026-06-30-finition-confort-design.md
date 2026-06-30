@@ -11,19 +11,18 @@ catalogue d'idées est déjà livré (OBS source, éditeur de thème, Stats API 
 historique + sparkline, live MMR, installer per-user, écran Diagnostic dans
 Réglages, auto-détection du log OneDrive dans `rllog.js`).
 
-Restent quatre trous réels, tous côté UI/câblage, faible risque :
+Restent trois trous réels, tous côté UI/câblage, faible risque :
 
-1. **i18n** : `lib/i18n.js` + tests existent mais ne sont jamais câblés ; le Hub est
-   `lang="fr"` en dur, aucun `data-i18n`. L'anglais ne marche pas.
-2. **Goals** : `lib/goals.js` est câblé dans `lib/viewmodel.js` (via `goalsCfg`,
+1. **Goals** : `lib/goals.js` est câblé dans `lib/viewmodel.js` (via `goalsCfg`,
    lu depuis `cfg.goals` en `main.js:333`) mais aucune UI ne permet de définir les
    objectifs. Le dashboard n'affiche que `goals[0]`.
-3. **Police + taille du MMR** : absents de la page Réglages.
-4. **Toggles d'éléments manquants + export/import de la config.**
+2. **Police + taille du MMR** : absents de la page Réglages.
+3. **Toggles d'éléments manquants + export/import de la config.**
 
 Hors scope (déjà fait ou écarté) : écran santé/Diagnostic (déjà dans Réglages),
-auto-détection log OneDrive (déjà dans `rllog.js`), remap des raccourcis (écarté
-par l'utilisateur), monétisation (`entitlement.js` reste `isPremium() === true`).
+auto-détection log OneDrive (déjà dans `rllog.js`), remap des raccourcis (écarté),
+**i18n / traduction EN (reporté)**, monétisation (`entitlement.js` reste
+`isPremium() === true`, reporté).
 
 ## 1. Mécanismes existants réutilisés
 
@@ -36,44 +35,7 @@ par l'utilisateur), monétisation (`entitlement.js` reste `isPremium() === true`
 - **viewmodel** : `evaluateGoals(goalsCfg, ctx)` renvoie déjà un tableau
   `{label, type, target, value, pct, done}`.
 
-## 2. Sous-projet i18n (FR/EN)
-
-### Objectif
-Anglais réel sur le Hub et l'overlay in-game, choix de langue auto au 1er lancement
-puis togglable. OBS exclu de ce lot (libellés minimaux, ajoutable plus tard).
-
-### Données
-- `lib/i18n.js` expose les dictionnaires `fr` et `en` (clé → libellé) et un
-  sélecteur `t(lang, key)` (ou table par langue). On complète les dictionnaires
-  avec toutes les clés des libellés actuellement en dur dans `hub.html` et
-  `index.html`.
-- Langue stockée dans `cfg.overlay.lang` (`'fr'` | `'en'`).
-
-### Détection initiale
-Au premier lancement (clé absente), `main.js` calcule la langue depuis
-`app.getLocale()` : si la locale commence par `en` → `'en'`, sinon `'fr'`. Écrit
-dans `cfg.overlay.lang` via `saveConfig`. Les lancements suivants respectent la
-valeur stockée (et le choix manuel).
-
-### UI
-- Nouvelle ligne `.srow` dans `#settings` : toggle/segmenté FR ⇄ EN, câblé sur
-  `set-overlay-flag('lang', value)`.
-
-### Renderer
-- Marquer chaque libellé traduisible par `data-i18n="clé"` dans `hub.html` et
-  `index.html`.
-- Fonction `applyLang(lang)` : parcourt `[data-i18n]`, remplace le texte par
-  `dict[lang][clé]`, met à jour `document.documentElement.lang`. Appelée au load et
-  à chaque réception d'un changement de `lang` (même canal que les autres flags
-  poussés au renderer).
-- Les libellés générés en JS (ex. cartes dashboard, tooltips) passent par `t(lang, …)`.
-
-### Tests
-- Détection langue : `en-US` → `en`, `fr-FR` → `fr`, locale inconnue → `fr`.
-- Dictionnaires : toute clé présente en `fr` existe en `en` et inversement
-  (pas de clé orpheline).
-
-## 3. Sous-projet UI Goals
+## 2. Sous-projet UI Goals
 
 ### Objectif
 Permettre à l'utilisateur de définir ses objectifs (le moteur les évalue déjà) et
@@ -109,7 +71,7 @@ afficher tous les objectifs actifs sur le dashboard.
 - Ajouter : sérialisation round-trip `cfg.goals` (save → load), validation des
   bornes de cible par type.
 
-## 4. Sous-projet Police + taille du MMR
+## 3. Sous-projet Police + taille du MMR
 
 ### Réglages (dans `#settings`)
 - **Police** : select 2-3 choix (ex. *Défaut*, *Condensée*, *Mono*). Valeur
@@ -127,7 +89,7 @@ afficher tous les objectifs actifs sur le dashboard.
 - Pas de logique pure nouvelle ; couvert par le smoke test du renderer. Vérif
   manuelle en jeu (rendu).
 
-## 5. Sous-projet Toggles d'éléments + export/import config
+## 4. Sous-projet Toggles d'éléments + export/import config
 
 ### Toggles manquants
 État actuel des toggles : halo MMR, musique, série, ±MMR. À ajouter : **peak**,
@@ -151,24 +113,19 @@ afficher tous les objectifs actifs sur le dashboard.
   même configuration.
 - Import d'un JSON invalide : rejeté proprement, la config existante est intacte.
 
-## 6. Ordre de livraison conseillé
+## 5. Ordre de livraison conseillé
 
 1. **Police + taille MMR** et **toggles d'éléments** (plus petits, mécanisme
    `set-overlay-flag` déjà là, impact perçu immédiat).
 2. **Export / import config** (robustesse, isolé).
 3. **UI Goals** (nouvelle surcouche + refonte du widget).
-4. **i18n** (le plus transverse : touche tous les libellés ; à faire en dernier
-   pour traduire d'un coup tout ce qui précède).
 
 Chaque sous-projet est indépendant et livrable seul.
 
-## 7. Risques / notes
+## 6. Risques / notes
 
 - **Auto-update public** : toute release est poussée à tous les utilisateurs.
   Tester hors-ligne puis en jeu (runClient via skill `run-rl-overlay`) avant tout
   tag/release.
-- i18n : risque d'oublier des libellés générés en JS ; le test « pas de clé
-  orpheline » et une relecture visuelle des deux langues couvrent ce risque.
 - Aucune migration de `config.json` requise : tous les nouveaux champs ont un
-  défaut (flags `true`, `lang` détectée, `goals` → défauts, `font`/`mmrSize`
-  → valeurs de base).
+  défaut (flags `true`, `goals` → défauts, `font`/`mmrSize` → valeurs de base).
