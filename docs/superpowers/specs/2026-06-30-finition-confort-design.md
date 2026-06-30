@@ -17,7 +17,7 @@ Restent trois trous réels, tous côté UI/câblage, faible risque :
    lu depuis `cfg.goals` en `main.js:333`) mais aucune UI ne permet de définir les
    objectifs. Le dashboard n'affiche que `goals[0]`.
 2. **Police + taille du MMR** : absents de la page Réglages.
-3. **Toggles d'éléments manquants + export/import de la config.**
+3. **Export/import de la config.**
 
 Hors scope (déjà fait ou écarté) : écran santé/Diagnostic (déjà dans Réglages),
 auto-détection log OneDrive (déjà dans `rllog.js`), remap des raccourcis (écarté),
@@ -89,16 +89,7 @@ afficher tous les objectifs actifs sur le dashboard.
 - Pas de logique pure nouvelle ; couvert par le smoke test du renderer. Vérif
   manuelle en jeu (rendu).
 
-## 4. Sous-projet Toggles d'éléments + export/import config
-
-### Toggles manquants
-État actuel des toggles : halo MMR, musique, série, ±MMR. À ajouter : **peak**,
-**boost**, **défi du jour**, **momentum-10**.
-- Une `.srow` par élément dans `#settings`, câblée `set-overlay-flag('show<Elem>', bool)`.
-- Renderer (`index.html`) : classe `hide-<elem>` sur le stage qui masque le bloc
-  correspondant (CSS), pilotée par la valeur du flag.
-- Le bouton « Réinitialiser les réglages » existant doit inclure ces nouveaux flags
-  dans son reset (`reset-overlay-settings`, `main.js:519`).
+## 4. Sous-projet Export / import config
 
 ### Export / import de la config
 - **Export** : bouton dans Réglages → `dialog.showSaveDialog` → écrit une copie de
@@ -115,8 +106,8 @@ afficher tous les objectifs actifs sur le dashboard.
 
 ## 5. Ordre de livraison conseillé
 
-1. **Police + taille MMR** et **toggles d'éléments** (plus petits, mécanisme
-   `set-overlay-flag` déjà là, impact perçu immédiat).
+1. **Police + taille MMR** (plus petit, mécanisme `set-overlay-flag` déjà là,
+   impact perçu immédiat).
 2. **Export / import config** (robustesse, isolé).
 3. **UI Goals** (nouvelle surcouche + refonte du widget).
 
