@@ -18,6 +18,21 @@
 //   images  : ['img/xxx.png']             — (option) captures, rendues en grille
 window.PATCH_NOTES = [
   {
+    version: '1.3.0',
+    date: '2026-07-03',
+    title: 'MMR à jour dès la fin de game + personnalisation',
+    items: [
+      { icon: '🐛', text: 'Le MMR se met enfin à jour juste après la fin de la partie (la détection de fin de match était déclenchée au mauvais moment).' },
+      { icon: '🎯', text: 'Nouvelle page Objectifs dans le Hub : définis jusqu\'à 4 objectifs (MMR à atteindre, winrate, MMR par semaine, victoires par jour), tous suivis sur le dashboard avec leur barre de progression.' },
+      { icon: '🔤', text: 'Choix de la police de l\'overlay (Défaut, Condensée, Mono) dans les Réglages.' },
+      { icon: '🔍', text: 'Taille du nombre de MMR réglable de 70 à 140 % — sans toucher au reste de l\'overlay.' },
+      { icon: '💾', text: 'Exporte ta config dans un fichier et réimporte-la quand tu veux (Réglages → Sauvegarde de la config).' },
+      { icon: '📊', text: 'Plus de doublons dans l\'historique : le résultat du match et le MMR sont fusionnés dans une seule entrée.' },
+    ],
+    themes: [],
+    images: [],
+  },
+  {
     version: '1.2.9',
     date: '2026-06-29',
     title: 'Correctif éditeur de thème',
