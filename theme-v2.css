@@ -35,7 +35,7 @@
 
 /* 2 — MMR géant + delta */
 .f5 .mmrrow { display: flex; align-items: baseline; gap: 10px; margin: 6px 0 2px; }
-.f5 .big { font-size: 46px; font-weight: 300; line-height: 1;
+.f5 .big { font-size: calc(46px * var(--mmrScale, 1)); font-weight: 300; line-height: 1;
   font-variant-numeric: tabular-nums; letter-spacing: -2px; color: var(--txt);
   text-shadow: 0 0 18px rgba(91,140,255,0.25); }
 .f5 .dlt { font-size: 14px; font-weight: 600; font-style: italic;

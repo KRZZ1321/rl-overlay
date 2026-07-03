@@ -31,6 +31,7 @@ const { startObsServer } = require('./obsserver');
 const OBS_PORT = 49200;
 const OBS_URL = 'http://127.0.0.1:' + OBS_PORT + '/';
 const { makeEntry, appendMatch, summarize, attachMmr } = require('./lib/matchlog');
+const { normalizeOverlayFlag } = require('./lib/settings-flags');
 const { sparkline } = require('./lib/sparkline');
 
 // Nom du process de Rocket League (sans .exe) tel que renvoyé par Get-Process.
@@ -47,7 +48,7 @@ const DEFAULT_CONFIG = {
   username: '',
   playlist: 'ranked-doubles',
   pollSeconds: 15,
-  overlay: { anchor: 'bottom-right', marginX: 320, marginY: 50, x: 20, y: 20, clickThrough: true, theme: 0, layout: 5, tutoSeen: false, lastSeenVersion: null, mmrGlow: true, showMusic: true, overlayScale: 100, overlayOpacity: 100, showStreak: true, showDelta: true, customThemes: [] },
+  overlay: { anchor: 'bottom-right', marginX: 320, marginY: 50, x: 20, y: 20, clickThrough: true, theme: 0, layout: 5, tutoSeen: false, lastSeenVersion: null, mmrGlow: true, showMusic: true, overlayScale: 100, overlayOpacity: 100, font: 'default', mmrSize: 100, showStreak: true, showDelta: true, customThemes: [] },
   // Discord Rich Presence : affiche MMR/rang live sur ton profil Discord.
   // clientId = "Application ID" d'une app creee sur discord.com/developers
   // (1 min, voir README). Vide = desactive. largeImageKey = cle d'un asset
@@ -217,6 +218,7 @@ function createWindow() {
     sendUpdate({ ...themePayload(), layout: o.layout || 0,
       mmrGlow: o.mmrGlow !== false, showMusic: o.showMusic !== false,
       overlayScale: o.overlayScale ?? 100, overlayOpacity: o.overlayOpacity ?? 100,
+      font: o.font || 'default', mmrSize: o.mmrSize ?? 100,
       showStreak: o.showStreak !== false, showDelta: o.showDelta !== false });
   });
   win.loadFile('index.html');
@@ -402,6 +404,7 @@ function pushHub() {
       _customThemes: o.customThemes || [], _themeIndex: o.theme || 0,
       _mmrGlow: o.mmrGlow !== false, _showMusic: o.showMusic !== false,
       _overlayScale: o.overlayScale ?? 100, _overlayOpacity: o.overlayOpacity ?? 100,
+      _font: o.font || 'default', _mmrSize: o.mmrSize ?? 100,
       _showStreak: o.showStreak !== false, _showDelta: o.showDelta !== false,
       _live: (lastLive && lastLive.inMatch) ? lastLive : null,
       _mmrLive: lastLiveMmr };
@@ -515,7 +518,7 @@ ipcMain.handle('get-matches', () => ({
   spark: sparkline(matches.slice(-30).map((m) => m.mmr).filter((n) => n != null)),
 }));
 // Remet les réglages d'affichage à leurs valeurs par défaut.
-const OVERLAY_SETTING_DEFAULTS = { mmrGlow: true, showMusic: true, showStreak: true, showDelta: true, overlayScale: 100, overlayOpacity: 100 };
+const OVERLAY_SETTING_DEFAULTS = { mmrGlow: true, showMusic: true, showStreak: true, showDelta: true, overlayScale: 100, overlayOpacity: 100, font: 'default', mmrSize: 100 };
 ipcMain.handle('reset-overlay-settings', () => {
   const cfg = loadConfig();
   Object.assign(cfg.overlay, OVERLAY_SETTING_DEFAULTS);
@@ -566,24 +569,15 @@ ipcMain.handle('apply-theme', (_e, index) => {
 });
 
 // IPC : réglage overlay depuis la page Réglages du Hub.
-// Booléens (toggles) et numériques (sliders, bornés). Tout autre clé -> ignorée.
-const BOOL_FLAGS = ['mmrGlow', 'showMusic', 'showStreak', 'showDelta'];
-const NUM_FLAGS = { overlayScale: [50, 150], overlayOpacity: [40, 100] };
+// Validation déléguée au module pur lib/settings-flags (bool/num/enum, testé).
 ipcMain.handle('set-overlay-flag', (_e, key, value) => {
-  let v;
-  if (BOOL_FLAGS.includes(key)) {
-    v = !!value;
-  } else if (NUM_FLAGS[key]) {
-    const [min, max] = NUM_FLAGS[key];
-    v = Math.max(min, Math.min(max, Math.round(Number(value) || 0)));
-  } else {
-    return false;
-  }
+  const r = normalizeOverlayFlag(key, value);
+  if (!r.ok) return false;
   const cfg = loadConfig();
-  cfg.overlay[key] = v;
+  cfg.overlay[key] = r.value;
   saveConfig(cfg);
-  sendUpdate({ [key]: v }); // applique en direct sur l'overlay
-  pushHub();                // garde la page Réglages en phase
+  sendUpdate({ [key]: r.value }); // applique en direct sur l'overlay
+  pushHub();                      // garde la page Réglages en phase
   return true;
 });
 

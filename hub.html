@@ -460,6 +460,25 @@
       <input type="range" class="slider" id="sl-opacity" min="40" max="100" step="5" />
       <span class="sval" id="sv-opacity">—</span>
     </div>
+    <div class="srow">
+      <div class="stext">
+        <div class="stitle">Police</div>
+        <div class="sdesc">Style de texte de l'overlay en jeu.</div>
+      </div>
+      <select class="slider" id="sel-font" style="flex:0 0 160px">
+        <option value="default">Défaut</option>
+        <option value="condensed">Condensée</option>
+        <option value="mono">Mono</option>
+      </select>
+    </div>
+    <div class="srow">
+      <div class="stext">
+        <div class="stitle">Taille du MMR</div>
+        <div class="sdesc">Agrandit ou réduit uniquement le nombre de MMR.</div>
+      </div>
+      <input type="range" class="slider" id="sl-mmrsize" min="70" max="140" step="5" />
+      <span class="sval" id="sv-mmrsize">—</span>
+    </div>
     <div class="dsep">Diagnostic</div>
     <div id="diag" class="diag"></div>
     <div class="srow">
@@ -598,6 +617,9 @@
     if (swDelta && vm._showDelta !== undefined) swDelta.classList.toggle('on', vm._showDelta !== false);
     syncSlider('sl-scale', 'sv-scale', vm._overlayScale, '%');
     syncSlider('sl-opacity', 'sv-opacity', vm._overlayOpacity, '%');
+    syncSlider('sl-mmrsize', 'sv-mmrsize', vm._mmrSize, '%');
+    const selFont = document.getElementById('sel-font');
+    if (selFont && vm._font && document.activeElement !== selFont) selFont.value = vm._font;
     document.body.classList.toggle('hot', !!vm.hot);
     document.body.classList.toggle('tilted', !!(vm.heuristics && vm.heuristics.tilt && vm.heuristics.tilt.tilted));
 
@@ -800,6 +822,9 @@
   }
   bindSlider('sl-scale', 'sv-scale', 'overlayScale', '%');
   bindSlider('sl-opacity', 'sv-opacity', 'overlayOpacity', '%');
+  bindSlider('sl-mmrsize', 'sv-mmrsize', 'mmrSize', '%');
+  const selFont = document.getElementById('sel-font');
+  if (selFont) selFont.addEventListener('change', () => window.hub.setFlag('font', selFont.value));
 
   // --- Historique ---
   const PL_LABEL = { 'ranked-duel': '1v1', 'ranked-doubles': '2v2', 'ranked-standard': '3v3' };

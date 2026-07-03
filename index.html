@@ -11,12 +11,12 @@
 
   html, body {
     background: transparent;
-    font-family: 'Segoe UI', 'Roboto', Arial, sans-serif;
+    font-family: var(--ui-font, 'Segoe UI', 'Roboto', Arial, sans-serif);
     -webkit-user-select: none;
     overflow: hidden;
   }
 
-  #stage { position: relative; transform: scale(var(--ovScale, 1)); transform-origin: top left;
+  #stage { --mmrScale: 1; position: relative; transform: scale(var(--ovScale, 1)); transform-origin: top left;
     opacity: var(--ovOpacity, 1); transition: opacity .25s ease, transform .25s ease; }
 
   /* ============================================================
@@ -86,7 +86,7 @@
   /* ---- F0 — Minimal : MMR géant + delta + streak ---- */
   .f0 { width: 126px; }
   .f0 .card { padding: 11px 12px 12px; text-align: center; }
-  .f0 .mmr { font-size: 38px; }
+  .f0 .mmr { font-size: calc(38px * var(--mmrScale, 1)); }
   .f0 .sub { display: flex; align-items: center; justify-content: center; gap: 9px; margin-top: 6px; }
   .f0 .delta { font-size: 13px; }
 
@@ -97,7 +97,7 @@
   .f1 .pl { font-size: 12px; }
   .f1 .head .rank { margin-left: auto; }
   .f1 .mid { display: flex; align-items: baseline; gap: 10px; }
-  .f1 .mid .mmr { font-size: 30px; }
+  .f1 .mid .mmr { font-size: calc(30px * var(--mmrScale, 1)); }
   .f1 .mid .delta { font-size: 13px; }
   .f1 .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
   .f1 .foot .wl { font-size: 15px; }
@@ -110,7 +110,7 @@
   .f2 .head .pl { font-size: 12px; }
   .f2 .head .rank { margin-left: auto; }
   .f2 .mmrrow { display: flex; align-items: baseline; gap: 11px; margin: 4px 0 8px; }
-  .f2 .mmrrow .mmr { font-size: 33px; }
+  .f2 .mmrrow .mmr { font-size: calc(33px * var(--mmrScale, 1)); }
   .f2 .mmrrow .delta { font-size: 14px; }
   .f2 .barrow { display: flex; align-items: center; gap: 8px; }
   .f2 .barrow .bar { flex: 1; }
@@ -124,7 +124,7 @@
   .f3 .head { display: flex; align-items: center; gap: 9px; }
   .f3 .head .col { display: flex; flex-direction: column; gap: 1px; }
   .f3 .head .pl { font-size: 12px; }
-  .f3 .head .mmr { font-size: 30px; margin-left: auto; }
+  .f3 .head .mmr { font-size: calc(30px * var(--mmrScale, 1)); margin-left: auto; }
   .f3 .barrow { display: flex; align-items: center; gap: 8px; margin: 8px 0 2px; }
   .f3 .barrow .bar { flex: 1; }
   .f3 .foot { display: flex; align-items: center; justify-content: space-between; margin-top: 9px; }
@@ -167,7 +167,7 @@
   .f4 .bot { bottom: 2px; left: 50%; transform: translateX(-50%); }
   .f4 .lft { left: 0;     top: 50%;  transform: translateY(-50%); }
   .f4 .rgt { right: 0;    top: 50%;  transform: translateY(-50%); }
-  .f4 .top .mmr { font-size: 24px; }
+  .f4 .top .mmr { font-size: calc(24px * var(--mmrScale, 1)); }
   .f4 .top .rank { display: block; margin-top: 1px; }
   .f4 .bot .wl { font-size: 15px; }
   .f4 .lft .delta, .f4 .rgt .delta { font-size: 13px; }
@@ -186,7 +186,7 @@
   .fbadge .btier { font-size: 10px; font-weight: 700; letter-spacing: 1.2px;
     text-transform: uppercase; color: var(--muted); }
   .fbadge .bmmrrow { display: flex; align-items: baseline; gap: 7px; }
-  .fbadge .bmmr { font-size: 25px; font-weight: 300; line-height: 1.05; color: var(--txt); }
+  .fbadge .bmmr { font-size: calc(25px * var(--mmrScale, 1)); font-weight: 300; line-height: 1.05; color: var(--txt); }
   .fbadge .bdelta { font-size: 13px; font-weight: 700; font-style: italic; }
   .fbadge .bdelta.up { color: var(--good); }
   .fbadge .bdelta.down { color: var(--loss); }
@@ -201,7 +201,7 @@
   .layout-wing .rank-icon-wing { width: 52px; height: 52px; object-fit: contain; filter: drop-shadow(0 0 8px color-mix(in srgb, var(--aA) 30%, transparent)); }
   .layout-wing .wing-right { display: flex; flex-direction: column; flex-grow: 1; }
   .layout-wing .row-top { display: flex; align-items: center; justify-content: space-between; line-height: 1; }
-  .layout-wing .row-top .mmr { font-size: 26px; font-weight: 900; color: var(--txt); }
+  .layout-wing .row-top .mmr { font-size: calc(26px * var(--mmrScale, 1)); font-weight: 900; color: var(--txt); }
   .layout-wing .row-top .delta { font-size: 12px; font-weight: 700; padding: 2px 6px; border-radius: 4px; background: rgba(0,0,0,0.2); }
   .layout-wing .row-top .delta.up { color: var(--good); } .layout-wing .row-top .delta.down { color: var(--loss); } .layout-wing .row-top .delta.flat { color: var(--muted); }
   .layout-wing .row-mid { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; margin: 4px 0 6px; }
@@ -226,7 +226,7 @@
   .layout-cyber .streak-pill.streak-loss { color: var(--loss); text-shadow: 0 0 8px color-mix(in srgb, var(--loss) 70%, transparent); }
   .layout-cyber .streak-pill.streak-zero { color: var(--dim); }
   .layout-cyber .cyber-main { display: flex; align-items: center; justify-content: space-between; }
-  .layout-cyber .huge-mmr { margin: 0; font-size: 48px; font-weight: 800; color: var(--txt); line-height: 1; letter-spacing: -1px;
+  .layout-cyber .huge-mmr { margin: 0; font-size: calc(48px * var(--mmrScale, 1)); font-weight: 800; color: var(--txt); line-height: 1; letter-spacing: -1px;
     font-variant-numeric: tabular-nums; text-shadow: 0 0 14px color-mix(in srgb, var(--aA) 30%, transparent); }
   .layout-cyber .cyber-badge-stack { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
   .layout-cyber .delta-tag { font-size: 12px; font-weight: 700; }
@@ -238,7 +238,7 @@
   .f-marquee { text-align: center; }
   .f-marquee .line1 { font-size: 13px; letter-spacing: 2px; text-transform: uppercase; color: var(--aA);
     text-shadow: 0 0 12px color-mix(in srgb, var(--aA) 60%, transparent); animation: mqLine 3.2s ease-in-out infinite; }
-  .f-marquee .mmr { display: inline-block; font-size: 42px; font-weight: 200; letter-spacing: -1px; color: var(--txt);
+  .f-marquee .mmr { display: inline-block; font-size: calc(42px * var(--mmrScale, 1)); font-weight: 200; letter-spacing: -1px; color: var(--txt);
     text-shadow: 0 0 20px color-mix(in srgb, var(--aA) 60%, transparent); animation: mqPulse 2.6s ease-in-out infinite; }
   .f-marquee .uline { height: 2px; margin: 3px auto 0; border-radius: 2px;
     background: linear-gradient(90deg, transparent, var(--aA), transparent);
@@ -813,6 +813,17 @@
     if (d.showMusic !== undefined) { showMusic = d.showMusic; paint(); }
     if (d.overlayScale !== undefined) document.documentElement.style.setProperty('--ovScale', (d.overlayScale / 100).toFixed(3));
     if (d.overlayOpacity !== undefined) document.documentElement.style.setProperty('--ovOpacity', (d.overlayOpacity / 100).toFixed(3));
+    if (d.font !== undefined) {
+      const FONTS = {
+        default: "'Segoe UI','Roboto',Arial,sans-serif",
+        condensed: "'Segoe UI Semibold','Arial Narrow','Segoe UI',sans-serif",
+        mono: "'Consolas','SFMono-Regular',ui-monospace,monospace"
+      };
+      document.documentElement.style.setProperty('--ui-font', FONTS[d.font] || FONTS.default);
+    }
+    if (d.mmrSize !== undefined) {
+      document.documentElement.style.setProperty('--mmrScale', (d.mmrSize / 100).toFixed(3));
+    }
     if (d.showStreak !== undefined) { showStreak = d.showStreak; paint(); }
     if (d.showDelta !== undefined) { showDelta = d.showDelta; paint(); }
     if (d.toast) showToast(d.toast);
