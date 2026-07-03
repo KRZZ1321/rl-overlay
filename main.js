@@ -578,6 +578,19 @@ ipcMain.handle('import-config', async () => {
   return { ok: true };
 });
 
+// --- Objectifs (page 🎯 du Hub) ---
+const { normalizeGoals } = require('./lib/goals');
+
+ipcMain.handle('get-goals', () => (loadConfig().goals || []));
+ipcMain.handle('save-goals', (_e, list) => {
+  const cfg = loadConfig();
+  cfg.goals = normalizeGoals(list);
+  saveConfig(cfg);
+  pushHub(); // rafraîchit le widget Objectifs du dashboard
+  poll();    // recalcule le viewmodel
+  return cfg.goals;
+});
+
 // --- Éditeur de thèmes custom ---
 // Enregistre (ou remplace par nom) un thème {name,aA,aB,bg,txt}, l'applique.
 ipcMain.handle('save-custom-theme', (_e, t) => {

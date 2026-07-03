@@ -14,6 +14,8 @@ contextBridge.exposeInMainWorld('hub', {
   copyObsUrl: () => ipcRenderer.invoke('copy-obs-url'),
   exportConfig: () => ipcRenderer.invoke('export-config'),
   importConfig: () => ipcRenderer.invoke('import-config'),
+  getGoals: () => ipcRenderer.invoke('get-goals'),
+  saveGoals: (list) => ipcRenderer.invoke('save-goals', list),
   saveTheme: (t) => ipcRenderer.invoke('save-custom-theme', t),
   deleteTheme: (name) => ipcRenderer.invoke('delete-custom-theme', name),
   applyTheme: (index) => ipcRenderer.invoke('apply-theme', index)

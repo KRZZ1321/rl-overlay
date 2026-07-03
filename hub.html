@@ -119,6 +119,38 @@
     border: 1px solid var(--line); background: var(--card); color: var(--aA); font-size: 13px;
     cursor: pointer; z-index: 60; box-shadow: 0 4px 14px rgba(0,0,0,0.5); line-height: 28px; text-align: center; }
   #theme-toggle:hover { border-color: var(--aA); }
+
+  #goals-toggle { position: fixed; top: 12px; right: 194px; width: 30px; height: 30px; border-radius: 50%;
+    border: 1px solid var(--line); background: var(--card); color: var(--aA); font-size: 13px;
+    cursor: pointer; z-index: 60; box-shadow: 0 4px 14px rgba(0,0,0,0.5); line-height: 28px; text-align: center; }
+  #goals-toggle:hover { border-color: var(--aA); }
+
+  /* Surcouche page Objectifs (même pattern que #settings) */
+  #goals { position: fixed; inset: 0; z-index: 70;
+    background: var(--bg); padding: 56px 40px; overflow-y: auto;
+    opacity: 0; visibility: hidden; transform: scale(.985);
+    transition: opacity .2s ease, transform .22s cubic-bezier(.22,1,.36,1), visibility 0s linear .22s; }
+  body.show-goals #goals { opacity: 1; visibility: visible; transform: none;
+    transition: opacity .2s ease, transform .22s cubic-bezier(.22,1,.36,1), visibility 0s; }
+  #goals h2 { font-size: 20px; font-weight: 800; letter-spacing: -.3px; margin-bottom: 2px; }
+  #goals .gsub { color: var(--muted); font-size: 13px; margin-bottom: 22px; }
+  #goals .gclose { position: absolute; top: 24px; right: 28px; font-size: 13px; color: var(--muted); cursor: pointer; }
+  #goals .gclose:hover { color: var(--txt); }
+  #goals .grow { display: flex; align-items: center; gap: 12px; max-width: 560px; }
+  .goal-item { display: flex; align-items: center; gap: 10px; max-width: 560px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .goal-item select, .goal-item input { background: var(--card); color: var(--txt); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; }
+  .goal-item select { flex: 1; }
+  .goal-item input.gtarget { flex: 0 0 90px; }
+  .goal-item .gdel { flex: 0 0 auto; background: var(--card); color: var(--muted); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; cursor: pointer; }
+  .goal-item .gdel:hover { color: var(--loss); border-color: var(--loss); }
+
+  /* Widget dashboard multi-objectifs */
+  .goals-widget .gw { margin-bottom: 8px; }
+  .goals-widget .gw:last-child { margin-bottom: 0; }
+  .goals-widget .gw-lbl { font-size: 12px; color: var(--txt); display: flex; justify-content: space-between; gap: 8px; }
+  .goals-widget .gw-lbl .gw-done { color: var(--good); }
+  .goals-widget .gw-bar { height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; margin-top: 3px; }
+  .goals-widget .gw-bar > i { display: block; height: 100%; width: 0%; border-radius: 3px; background: linear-gradient(90deg, var(--aA), var(--aB)); }
   #theme-editor { position: fixed; inset: 0; z-index: 70;
     background: color-mix(in srgb, var(--bg) 88%, transparent); backdrop-filter: blur(6px);
     padding: 40px 48px; overflow: auto;
@@ -365,13 +397,14 @@
       <section class="card widget"><div class="label">Défi du jour</div><div class="big" data-f="dailyLabel">—</div><div class="bar hot"><i data-f="dailyBar"></i></div></section>
       <section class="card widget"><div class="label">Régularité</div><div class="big" data-f="consist">—</div></section>
       <section class="card widget"><div class="label">Élan de session</div><div class="big" data-f="heat">—</div></section>
-      <section class="card widget"><div class="label">Objectif</div><div class="big" data-f="goalLabel">—</div><div class="bar"><i data-f="goalBar"></i></div></section>
+      <section class="card widget"><div class="label">Objectifs</div><div id="goalsWidget" class="goals-widget"><div class="label">—</div></div></section>
     </div>
 
     <section class="card" id="tilt" data-f="tilt">⚠ —</section>
   </div>
   <div class="hint">Échap ou Ctrl+Alt+Espace pour fermer</div>
   <button id="theme-toggle" title="Éditeur de thème">🎨</button>
+  <button id="goals-toggle" title="Objectifs">🎯</button>
   <button id="history-toggle" title="Historique">📈</button>
   <button id="settings-toggle" title="Réglages">⚙</button>
   <div id="theme-editor">
@@ -517,6 +550,17 @@
         <div class="sdesc">Remet l'affichage (halo, série, ±MMR, musique, taille, opacité) par défaut.</div>
       </div>
       <button class="dbtn" id="reset-settings">Réinitialiser</button>
+    </div>
+  </div>
+  <div id="goals">
+    <span class="gclose" id="goals-close">✕ Fermer (Échap)</span>
+    <h2>Objectifs</h2>
+    <div class="gsub">Définis jusqu'à 4 objectifs suivis sur le dashboard.</div>
+    <div id="goals-list"></div>
+    <button class="dbtn" id="goal-add">+ Ajouter un objectif</button>
+    <div class="grow" style="margin-top:18px">
+      <button class="dbtn" id="goals-save">Enregistrer</button>
+      <span id="goals-status" class="sdesc"></span>
     </div>
   </div>
   <div id="news">
@@ -691,9 +735,15 @@
     const db = $('dailyBar'); if (db) db.style.width = (vm.daily ? vm.daily.pct : 0) + '%';
     txt('consist', vm.heuristics.consistency ? vm.heuristics.consistency.grade : '—');
     txt('heat', (vm.boost || 0) + '%');
-    const g0 = (vm.goals && vm.goals[0]) || null;
-    txt('goalLabel', g0 ? g0.label : '—');
-    const gb = $('goalBar'); if (gb) gb.style.width = (g0 ? g0.pct : 0) + '%';
+    const gw = document.getElementById('goalsWidget');
+    if (gw) {
+      const gs = vm.goals || [];
+      gw.innerHTML = gs.length
+        ? gs.map((g) => `<div class="gw"><div class="gw-lbl"><span>${g.label}</span>` +
+            `<span class="${g.done ? 'gw-done' : ''}">${g.done ? '✓' : g.pct + '%'}</span></div>` +
+            `<div class="gw-bar"><i style="width:${g.pct}%"></i></div></div>`).join('')
+        : '<div class="label">Aucun objectif</div>';
+    }
 
     // Tilt.
     if (vm.heuristics && vm.heuristics.tilt && vm.heuristics.tilt.tilted) {
@@ -745,6 +795,63 @@
   const keysOn = () => document.body.classList.contains('show-keys');
   const newsOn = () => document.body.classList.contains('show-news');
   const settingsOn = () => document.body.classList.contains('show-settings');
+  const goalsOn = () => document.body.classList.contains('show-goals');
+
+  // --- Page Objectifs ---
+  const GOAL_TYPE_LABELS = {
+    reachMmr: 'Atteindre un MMR',
+    winrate: 'Winrate (%)',
+    mmrWeek: 'MMR gagné / semaine',
+    winsDay: 'Victoires / jour'
+  };
+  const goalsListEl = document.getElementById('goals-list');
+
+  function addGoalRow(goal) {
+    const g = goal || { type: 'reachMmr', target: 1110 };
+    const row = document.createElement('div');
+    row.className = 'goal-item';
+    const opts = Object.keys(GOAL_TYPE_LABELS)
+      .map((t) => `<option value="${t}"${t === g.type ? ' selected' : ''}>${GOAL_TYPE_LABELS[t]}</option>`).join('');
+    row.innerHTML =
+      `<select class="gtype">${opts}</select>` +
+      `<input class="gtarget" type="number" value="${g.target}" />` +
+      `<button class="gdel" title="Supprimer">✕</button>`;
+    row.querySelector('.gdel').addEventListener('click', () => { row.remove(); refreshAddState(); });
+    goalsListEl.appendChild(row);
+    refreshAddState();
+  }
+
+  function refreshAddState() {
+    const addBtn = document.getElementById('goal-add');
+    if (addBtn) addBtn.disabled = goalsListEl.children.length >= 4;
+  }
+
+  function readGoalRows() {
+    return [...goalsListEl.querySelectorAll('.goal-item')].map((row) => ({
+      type: row.querySelector('.gtype').value,
+      target: parseInt(row.querySelector('.gtarget').value, 10) || 0
+    }));
+  }
+
+  async function openGoals() {
+    goalsListEl.innerHTML = '';
+    let list = [];
+    try { list = await window.hub.getGoals(); } catch {}
+    if (!list || list.length === 0) list = [{ type: 'reachMmr', target: 1110 }];
+    list.forEach(addGoalRow);
+    document.body.classList.add('show-goals');
+  }
+
+  document.getElementById('goals-toggle').addEventListener('click', openGoals);
+  document.getElementById('goals-close').addEventListener('click', () => document.body.classList.remove('show-goals'));
+  document.getElementById('goals').addEventListener('click', (e) => { if (e.target.id === 'goals') document.body.classList.remove('show-goals'); });
+  document.getElementById('goal-add').addEventListener('click', () => addGoalRow());
+  document.getElementById('goals-save').addEventListener('click', async () => {
+    const status = document.getElementById('goals-status');
+    let saved = [];
+    try { saved = await window.hub.saveGoals(readGoalRows()); } catch {}
+    if (status) { status.textContent = `✓ ${saved.length} objectif(s) enregistré(s)`; setTimeout(() => { status.textContent = ''; }, 2000); }
+  });
   document.getElementById('keys-toggle').addEventListener('click', () => document.body.classList.toggle('show-keys'));
   document.getElementById('keys-close').addEventListener('click', () => document.body.classList.remove('show-keys'));
   document.getElementById('news-toggle').addEventListener('click', () => document.body.classList.toggle('show-news'));
@@ -963,6 +1070,7 @@
     if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
     if (keysOn()) { document.body.classList.remove('show-keys'); }
     else if (newsOn()) { document.body.classList.remove('show-news'); }
+    else if (goalsOn()) { document.body.classList.remove('show-goals'); }
     else if (settingsOn()) { document.body.classList.remove('show-settings'); }
     else if (document.body.classList.contains('show-history')) { document.body.classList.remove('show-history'); }
     else if (document.body.classList.contains('show-theme')) { document.body.classList.remove('show-theme'); }
