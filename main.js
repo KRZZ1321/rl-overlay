@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, globalShortcut, screen, shell, clipboard } = require('electron');
+const { app, BrowserWindow, ipcMain, globalShortcut, screen, shell, clipboard, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const { spawn } = require('child_process');
@@ -534,6 +534,49 @@ ipcMain.handle('force-update-check', () => { updateChecked = false; checkForUpda
 ipcMain.handle('enable-stats-api', () => enableStatsApi());
 // Copie l'URL de la source OBS dans le presse-papier.
 ipcMain.handle('copy-obs-url', () => { clipboard.writeText(OBS_URL); return OBS_URL; });
+
+// --- Export / import de la config (page Réglages) ---
+const { parseConfigImport } = require('./lib/config-port');
+
+ipcMain.handle('export-config', async () => {
+  const r = await dialog.showSaveDialog({
+    title: 'Exporter la configuration',
+    defaultPath: 'rl-overlay-config.json',
+    filters: [{ name: 'JSON', extensions: ['json'] }]
+  });
+  if (r.canceled || !r.filePath) return { ok: false, canceled: true };
+  try {
+    fs.copyFileSync(CONFIG_PATH, r.filePath);
+    return { ok: true };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+});
+
+ipcMain.handle('import-config', async () => {
+  const r = await dialog.showOpenDialog({
+    title: 'Importer une configuration',
+    properties: ['openFile'],
+    filters: [{ name: 'JSON', extensions: ['json'] }]
+  });
+  if (r.canceled || !r.filePaths || !r.filePaths[0]) return { ok: false, canceled: true };
+  let raw;
+  try { raw = fs.readFileSync(r.filePaths[0], 'utf8'); }
+  catch (e) { return { ok: false, error: 'read-failed' }; }
+  const parsed = parseConfigImport(raw.replace(/^﻿/, ''));
+  if (!parsed.ok) return { ok: false, error: parsed.error };
+  saveConfig(parsed.config);
+  // Re-applique partout.
+  const o = loadConfig().overlay;
+  sendUpdate({ ...themePayload(), layout: o.layout || 0,
+    mmrGlow: o.mmrGlow !== false, showMusic: o.showMusic !== false,
+    overlayScale: o.overlayScale ?? 100, overlayOpacity: o.overlayOpacity ?? 100,
+    showStreak: o.showStreak !== false, showDelta: o.showDelta !== false,
+    font: o.font || 'default', mmrSize: o.mmrSize ?? 100 });
+  pushHub();
+  poll();
+  return { ok: true };
+});
 
 // --- Éditeur de thèmes custom ---
 // Enregistre (ou remplace par nom) un thème {name,aA,aB,bg,txt}, l'applique.

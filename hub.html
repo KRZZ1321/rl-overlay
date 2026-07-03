@@ -505,6 +505,14 @@
     </div>
     <div class="srow">
       <div class="stext">
+        <div class="stitle">Sauvegarde de la config</div>
+        <div class="sdesc">Exporte tes réglages dans un fichier, ou réimporte une sauvegarde.</div>
+      </div>
+      <button class="dbtn" id="export-cfg">Exporter</button>
+      <button class="dbtn" id="import-cfg">Importer</button>
+    </div>
+    <div class="srow">
+      <div class="stext">
         <div class="stitle">Réinitialiser les réglages</div>
         <div class="sdesc">Remet l'affichage (halo, série, ±MMR, musique, taille, opacité) par défaut.</div>
       </div>
@@ -783,6 +791,18 @@
     const b = document.getElementById('copy-obs'); const old = b.textContent;
     let url = ''; try { url = await window.hub.copyObsUrl(); } catch {}
     b.textContent = url ? '✓ Copié' : '⚠ Erreur'; setTimeout(() => { b.textContent = old; }, 2000);
+  });
+  document.getElementById('export-cfg').addEventListener('click', async () => {
+    const b = document.getElementById('export-cfg'); const old = b.textContent;
+    let r = {}; try { r = await window.hub.exportConfig(); } catch {}
+    b.textContent = r.ok ? '✓ Exporté' : r.canceled ? old : '⚠ Échec';
+    setTimeout(() => { b.textContent = old; }, 2000);
+  });
+  document.getElementById('import-cfg').addEventListener('click', async () => {
+    const b = document.getElementById('import-cfg'); const old = b.textContent;
+    let r = {}; try { r = await window.hub.importConfig(); } catch {}
+    b.textContent = r.ok ? '✓ Importé' : r.canceled ? old : '⚠ Fichier invalide';
+    setTimeout(() => { b.textContent = old; }, 2500);
   });
   document.getElementById('diag-logs').addEventListener('click', () => window.hub.openLogs && window.hub.openLogs());
   document.getElementById('diag-upd').addEventListener('click', async () => {

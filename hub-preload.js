@@ -12,6 +12,8 @@ contextBridge.exposeInMainWorld('hub', {
   forceUpdateCheck: () => ipcRenderer.invoke('force-update-check'),
   enableStats: () => ipcRenderer.invoke('enable-stats-api'),
   copyObsUrl: () => ipcRenderer.invoke('copy-obs-url'),
+  exportConfig: () => ipcRenderer.invoke('export-config'),
+  importConfig: () => ipcRenderer.invoke('import-config'),
   saveTheme: (t) => ipcRenderer.invoke('save-custom-theme', t),
   deleteTheme: (name) => ipcRenderer.invoke('delete-custom-theme', name),
   applyTheme: (index) => ipcRenderer.invoke('apply-theme', index)
