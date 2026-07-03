@@ -41,3 +41,43 @@ test('mmr null => value 0, jamais NaN', () => {
   assert.strictEqual(r.value, 0);
   assert.ok(!Number.isNaN(r.pct));
 });
+
+// --- normalizeGoals (UI objectifs) ---
+const { normalizeGoals, GOAL_TYPES, defaultGoalLabel } = require('../lib/goals');
+
+test('GOAL_TYPES expose les 4 types du moteur', () => {
+  assert.deepStrictEqual([...GOAL_TYPES].sort(), ['mmrWeek', 'reachMmr', 'winrate', 'winsDay']);
+});
+
+test('normalizeGoals filtre les types inconnus', () => {
+  const out = normalizeGoals([{ type: 'bogus', target: 5 }, { type: 'winsDay', target: 5 }]);
+  assert.strictEqual(out.length, 1);
+  assert.strictEqual(out[0].type, 'winsDay');
+});
+
+test('normalizeGoals clampe la cible selon le type', () => {
+  assert.strictEqual(normalizeGoals([{ type: 'winrate', target: 999 }])[0].target, 100);
+  assert.strictEqual(normalizeGoals([{ type: 'winrate', target: -5 }])[0].target, 0);
+});
+
+test('normalizeGoals limite à 4 objectifs', () => {
+  const five = Array.from({ length: 5 }, () => ({ type: 'winsDay', target: 3 }));
+  assert.strictEqual(normalizeGoals(five).length, 4);
+});
+
+test('normalizeGoals génère un label par défaut si absent', () => {
+  assert.strictEqual(normalizeGoals([{ type: 'reachMmr', target: 1110 }])[0].label, 'Atteindre 1110 MMR');
+});
+
+test('normalizeGoals garde un label fourni', () => {
+  assert.strictEqual(normalizeGoals([{ type: 'winsDay', target: 5, label: 'Mon objectif' }])[0].label, 'Mon objectif');
+});
+
+test('normalizeGoals sur non-tableau -> []', () => {
+  assert.deepStrictEqual(normalizeGoals(null), []);
+});
+
+test('defaultGoalLabel couvre les 4 types', () => {
+  assert.strictEqual(defaultGoalLabel('winrate', 60), 'Winrate 60%');
+  assert.strictEqual(defaultGoalLabel('mmrWeek', 100), '+100 MMR / semaine');
+});
