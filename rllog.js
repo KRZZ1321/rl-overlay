@@ -33,16 +33,22 @@ function defaultLogPath() {
 // Patterns vérifiés sur un vrai Launch.log.
 const RE_PLAYLIST_START = /for playlists (\d+)/;            // Matchmaking: StartMatchmaking ... for playlists 11
 const RE_RESERVATION    = /Reservation=\(.*?Playlist=(\d+)/; // Party: HandleServerReserved (Reservation=(...Playlist=11...))
-const RE_MATCH_END      = /GFX_(?:WinnerMenu|EndGameMenu)_SF/;
 const RE_MMR            = /Post-divide PartyLeaderMMR:\s*([\d.]+)/; // MMR interne (échelle ~21-31)
 const RE_TIER           = /PartyLeaderTier=\((\d+)\)/;              // tier de rang exact
+// Fin de match : les packages GFX_WinnerMenu/EndGameMenu sont préchargés AU JOIN
+// de chaque map (donc inutilisables comme signal de fin). La vraie fin est le
+// LoadMap qui quitte le serveur : retour menu ou transition vers le match suivant.
+// L'ip:port avant la map distingue un vrai serveur online du freeplay/replay local.
+const RE_MAP_SERVER = /LoadMap: \d+\.\d+\.\d+\.\d+:\d+\//;                 // join d'un serveur online
+const RE_MAP_EXIT   = /LoadMap: (?:MENU_Main_p|JoinGameTransition)/;       // on quitte la map courante
 
 // id de playlist RL -> clé interne suivie par l'overlay (modes classés seulement ;
 // les autres ids ne forcent pas la playlist affichée).
 const PLAYLIST_IDS = { 10: 'ranked-duel', 11: 'ranked-doubles', 13: 'ranked-standard' };
 
 // Parse pure d'une ligne -> appelle emit.matchStart(id, mmrInterne, tier) / emit.matchEnd.
-// `st` porte le dernier MMR interne + tier vus (écrits juste avant le StartMatchmaking).
+// `st` porte le dernier MMR interne + tier vus (écrits juste avant le StartMatchmaking)
+// et `inMatch` (on est sur un serveur online) pour dater la fin au LoadMap de sortie.
 function parseLine(line, emit, st) {
   st = st || {};
   let m;
@@ -50,7 +56,8 @@ function parseLine(line, emit, st) {
   if ((m = line.match(RE_TIER))) { st.tier = parseInt(m[1], 10); return; }
   m = line.match(RE_PLAYLIST_START) || line.match(RE_RESERVATION);
   if (m) { emit.matchStart(parseInt(m[1], 10), st.mmr, st.tier); st.mmr = undefined; st.tier = undefined; return; }
-  if (RE_MATCH_END.test(line)) emit.matchEnd();
+  if (RE_MAP_SERVER.test(line)) { st.inMatch = true; return; }
+  if (RE_MAP_EXIT.test(line) && st.inMatch) { st.inMatch = false; emit.matchEnd(); }
 }
 
 // Surveille le log et émet les événements. Renvoie { stop }.
@@ -78,12 +85,14 @@ function startLogWatcher(opts = {}) {
   };
 
   function tick() {
-    fs.stat(logPath, (err, st) => {
+    // NB : ne pas nommer ce paramètre `st` (masquerait l'état de parse ci-dessus,
+    // parseLine recevrait l'objet fs.Stats et perdrait MMR/tier/inMatch à chaque tick).
+    fs.stat(logPath, (err, fst) => {
       if (err) return;                         // log absent -> on retente au prochain tick
-      if (!started) { pos = st.size; started = true; return; } // démarre à la fin (pas d'historique)
-      if (st.size < pos) { pos = 0; buf = ''; } // rotation/troncature (redémarrage du jeu)
-      if (st.size <= pos) return;
-      const end = st.size;
+      if (!started) { pos = fst.size; started = true; return; } // démarre à la fin (pas d'historique)
+      if (fst.size < pos) { pos = 0; buf = ''; } // rotation/troncature (redémarrage du jeu)
+      if (fst.size <= pos) return;
+      const end = fst.size;
       const stream = fs.createReadStream(logPath, { start: pos, end: end - 1, encoding: 'utf8' });
       let data = '';
       stream.on('data', (d) => { data += d; });

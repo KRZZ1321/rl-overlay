@@ -30,7 +30,7 @@ function themePayload() {
 const { startObsServer } = require('./obsserver');
 const OBS_PORT = 49200;
 const OBS_URL = 'http://127.0.0.1:' + OBS_PORT + '/';
-const { makeEntry, appendMatch, summarize } = require('./lib/matchlog');
+const { makeEntry, appendMatch, summarize, attachMmr } = require('./lib/matchlog');
 const { sparkline } = require('./lib/sparkline');
 
 // Nom du process de Rocket League (sans .exe) tel que renvoyé par Get-Process.
@@ -896,7 +896,8 @@ function refreshAfterMatch() {
     const now = mmrRef(sel).last;
     logFocus(`post-match refresh #${tries}: mmr ${before} -> ${now}`);
     if (now !== before && now != null) {
-      if (before != null) { matches = appendMatch(matches, makeEntry(sel, before, now, today())); saveMatches(); logFocus(`match enregistré: ${sel} ${before}->${now}`); }
+      // Complète l'entrée Stats API du même match si elle existe (sinon append).
+      if (before != null) { matches = attachMmr(matches, sel, before, now); saveMatches(); logFocus(`match enregistré: ${sel} ${before}->${now}`); }
       logFocus('post-match: maj MMR détectée');
       return;
     }
@@ -950,6 +951,10 @@ function startStatsApiWatcher() {
           logFocus(`statsapi: match enregistré ${r} ${lastLive.teamScore}-${lastLive.oppScore} (buts ${me.goals}${recap ? ', boost moy ' + recap.avgBoost : ''})`);
         }
         lastLive = null; lastLiveSig = ''; matchAgg = null; pushHub();
+        // Signal de fin le plus précoce (instantané, avant le LoadMap de sortie du
+        // log RL) -> lance la rafale de refresh MMR tout de suite.
+        logFocus('statsapi: match end -> refresh MMR');
+        refreshAfterMatch();
       } else if (ev === 'Initialized' || ev === 'MatchCreated' || ev === 'MatchDestroyed') {
         lastLive = null; lastLiveSig = ''; matchAgg = null; pushHub(); // nouveau match / reset -> état propre
       }
