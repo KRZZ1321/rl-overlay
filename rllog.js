@@ -52,7 +52,7 @@ const PLAYLIST_IDS = { 10: 'ranked-duel', 11: 'ranked-doubles', 13: 'ranked-stan
 function parseLine(line, emit, st) {
   st = st || {};
   let m;
-  if ((m = line.match(RE_MMR))) { st.mmr = parseFloat(m[1]); return; }
+  if ((m = line.match(RE_MMR))) { st.mmr = parseFloat(m[1]); if (emit.mmr) emit.mmr(st.mmr, st.tier); return; }
   if ((m = line.match(RE_TIER))) { st.tier = parseInt(m[1], 10); return; }
   m = line.match(RE_PLAYLIST_START) || line.match(RE_RESERVATION);
   if (m) { emit.matchStart(parseInt(m[1], 10), st.mmr, st.tier); st.mmr = undefined; st.tier = undefined; return; }
@@ -65,6 +65,7 @@ function startLogWatcher(opts = {}) {
   const logPath = opts.logPath || defaultLogPath();
   const onMatchStart = opts.onMatchStart || (() => {});
   const onMatchEnd = opts.onMatchEnd || (() => {});
+  const onMmr = opts.onMmr || (() => {}); // chaque ligne PartyLeaderMMR du log -> MMR live immédiat
   const intervalMs = opts.intervalMs || 1000;
   const log = opts.log || (() => {});
 
@@ -75,6 +76,7 @@ function startLogWatcher(opts = {}) {
   const st = {};       // MMR interne + tier en attente (lignes avant le StartMatchmaking)
 
   const emit = {
+    mmr: (mmr, tier) => { onMmr(mmr, tier); },
     matchStart: (id, mmr, tier) => { onMatchStart(id, PLAYLIST_IDS[id] || null, mmr, tier); },
     matchEnd: () => {
       const now = Date.now();

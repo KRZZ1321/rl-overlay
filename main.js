@@ -1183,6 +1183,9 @@ function startMatchLogWatcher() {
       if (key) switchPlaylist(key); // suit la playlist réellement jouée
       if (key) calibrateAndPushLiveMmr(key, internal, tier);
     },
+    onMmr: (internal, tier) => { // chaque MMR loggué -> maj live immédiate (au plus tôt)
+      if (Number.isFinite(internal)) calibrateAndPushLiveMmr(loadConfig().playlist, internal, tier);
+    },
     onMatchEnd: () => { logFocus('log: match end -> refresh MMR'); refreshAfterMatch(); },
   });
 }
