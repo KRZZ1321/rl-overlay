@@ -1064,6 +1064,7 @@ function refreshAfterMatch() {
     if (now !== before && now != null) {
       // Complète l'entrée Stats API du même match si elle existe (sinon append).
       if (before != null) { matches = attachMmr(matches, sel, before, now); saveMatches(); logFocus(`match enregistré: ${sel} ${before}->${now}`); }
+      clearProvisional(); // vrai MMR tracker arrivé -> retire l'estimation
       logFocus('post-match: maj MMR détectée');
       return;
     }
@@ -1115,6 +1116,17 @@ function startStatsApiWatcher() {
           }));
           saveMatches();
           logFocus(`statsapi: match enregistré ${r} ${lastLive.teamScore}-${lastLive.oppScore} (buts ${me.goals}${recap ? ', boost moy ' + recap.avgBoost : ''})`);
+          // Estimation MMR INSTANTANÉE d'après le résultat (avant que RL logue le vrai) :
+          // +delta victoire / -delta défaite. Corrigé dès l'arrivée du vrai MMR (log/tracker).
+          if (r === 'W' || r === 'L') {
+            const sel = loadConfig().playlist;
+            const base = (lastLiveMmr && lastLiveMmr.playlist === sel && lastLiveMmr.mmr != null) ? lastLiveMmr.mmr : mmrRef(sel).last;
+            if (Number.isFinite(base)) {
+              mmrProvisional = base + (r === 'W' ? EST_DELTA : -EST_DELTA);
+              sendUpdate({ mmrProvisional });
+              logFocus(`MMR provisoire ${r}: ${base} -> ${mmrProvisional}`);
+            }
+          }
         }
         lastLive = null; lastLiveSig = ''; matchAgg = null; pushHub();
         // Signal de fin le plus précoce (instantané, avant le LoadMap de sortie du
@@ -1152,6 +1164,13 @@ function startObsServerOnce() {
 // affiché via une calibration linéaire par playlist (apprise des paires
 // interne↔tracker). Mis à jour à chaque mise en file = instantané (avant tracker).
 let lastLiveMmr = null;
+let mmrProvisional = null;   // estimation instantanée post-match (±EST_DELTA), corrigée ensuite
+const EST_DELTA = 9;         // delta MMR estimé par match ranked (moyenne typique)
+
+// Efface l'estimation provisoire (la vraie valeur a pris le relais).
+function clearProvisional() {
+  if (mmrProvisional != null) { mmrProvisional = null; sendUpdate({ mmrProvisional: null }); }
+}
 function calibrateAndPushLiveMmr(key, internal, tier) {
   if (!Number.isFinite(internal)) return;
   const cfg = loadConfig();
@@ -1169,6 +1188,7 @@ function calibrateAndPushLiveMmr(key, internal, tier) {
   }
   lastLiveMmr = (live != null) ? { playlist: key, mmr: live, tier, internal, assumed: !(calib && calib.confirmed) } : null;
   sendUpdate({ mmrLive: lastLiveMmr });
+  clearProvisional(); // le vrai MMR (log) remplace l'estimation
   pushHub();
 }
 

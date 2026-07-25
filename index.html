@@ -355,6 +355,7 @@
     text-shadow: 0 1px 2px rgba(0,0,0,0.95), 0 0 6px rgba(0,0,0,0.7);
   }
   .np .np-txt { overflow: hidden; text-overflow: ellipsis; }
+  .mmr-prov { opacity: .78; } /* MMR = estimation provisoire (avant correction) */
   .np-cover {
     width: 22px; height: 22px; border-radius: 4px; flex: 0 0 auto; object-fit: cover;
     box-shadow: 0 1px 4px rgba(0,0,0,0.6);
@@ -385,7 +386,7 @@
   const state = {
     mmr: null, playlist: '2v2', rankTier: null, rankDiv: null, rankIcon: null,
     startMmr: null, wins: 0, losses: 0, streak: 0, gameStreak: null,
-    goals: null, saves: null, spotify: null, cover: null, mmrLive: null,
+    goals: null, saves: null, spotify: null, cover: null, mmrLive: null, mmrProvisional: null,
     // Form Premium (f5) — view-model dérivé (Plan 2).
     promoPct: 0, promoMatches: 0, momResults: [], boost: 0, sessionMs: 0, hot: false
   };
@@ -586,11 +587,13 @@
     const s = state;
 
     setText('pl', s.playlist || '2v2');
-    // MMR affiché : priorité au calcul depuis le log RL (instantané, pas de lag
-    // tracker.gg) UNE FOIS la calibration confirmée ; sinon repli tracker (précis).
+    // MMR affiché : 1) estimation provisoire W/L (instantanée en fin de match) ;
+    // 2) calcul log RL une fois calibré ; 3) repli tracker. La provisoire est
+    // corrigée dès l'arrivée du vrai MMR.
     const useLive = s.mmrLive && s.mmrLive.mmr != null && !s.mmrLive.assumed;
-    const effMmr = useLive ? s.mmrLive.mmr : s.mmr;
+    const effMmr = (s.mmrProvisional != null) ? s.mmrProvisional : (useLive ? s.mmrLive.mmr : s.mmr);
     setText('mmr', effMmr == null ? '—' : effMmr);
+    q('mmr').forEach((e) => e.classList.toggle('mmr-prov', s.mmrProvisional != null)); // marque l'estimation
 
     const rankTxt = s.rankTier
       ? (s.rankDiv ? s.rankTier + ' · ' + s.rankDiv.replace('Division', 'Div') : s.rankTier)
@@ -855,6 +858,7 @@
     }
     if (d.mmr != null) state.mmr = d.mmr;
     if (d.mmrLive !== undefined) state.mmrLive = d.mmrLive; // MMR calculé depuis le log RL (instantané)
+    if (d.mmrProvisional !== undefined) state.mmrProvisional = d.mmrProvisional; // estimation W/L instantanée
     if (d.startMmr !== undefined) state.startMmr = d.startMmr;
     if (d.rankTier !== undefined) state.rankTier = d.rankTier;
     if (d.rankDiv !== undefined) state.rankDiv = d.rankDiv;
