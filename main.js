@@ -779,82 +779,42 @@ let lastSpotify = null;
 let lastCover = null;               // URL pochette du morceau courant (null si aucune)
 const coverCache = new Map();       // "Artiste - Titre" -> URL|null (évite de re-fetch)
 
-// Pochette via l'API publique iTunes Search (gratuite, sans clé, no-injection).
+// Pochette via API publiques (sans clé, no-injection) : Deezer d'abord (excellent
+// catalogue, dont rap FR où iTunes se plante souvent), repli iTunes si rien.
 async function fetchCover(track) {
   if (coverCache.has(track)) return coverCache.get(track);
   let url = null;
+  const norm = (s) => String(s || '').toLowerCase().trim();
+  const dash = track.indexOf(' - ');
+  const artist = dash > 0 ? track.slice(0, dash).trim() : '';
+  const title = dash > 0 ? track.slice(dash + 3).trim() : track;
+  const titleBase = norm(title).split(' (')[0].split(' - ')[0].trim(); // sans "(feat...)"/remix
   try {
-    const norm = (s) => String(s || '').toLowerCase().trim();
-    const dash = track.indexOf(' - ');
-    const artist = dash > 0 ? norm(track.slice(0, dash)) : '';
-    const title = dash > 0 ? norm(track.slice(dash + 3)) : norm(track);
-    const titleBase = title.split(' (')[0].split(' - ')[0].trim(); // sans "(feat...)"/remix
-    const term = encodeURIComponent(track.replace(' - ', ' '));
-    const r = await fetch(`https://itunes.apple.com/search?term=${term}&entity=song&limit=10`, { signal: AbortSignal.timeout(5000) });
-    if (r.ok) {
-      const j = await r.json();
-      const res = j.results || [];
-      // Meilleur match : artiste + titre exacts, sinon inclusion, sinon 1er résultat.
-      const best = res.find((x) => norm(x.artistName) === artist && norm(x.trackName) === title)
-        || res.find((x) => artist && norm(x.artistName).includes(artist) && norm(x.trackName).includes(titleBase))
-        || res.find((x) => norm(x.trackName).includes(titleBase))
+    // 1) Deezer : requête précise artiste+titre, puis requête simple.
+    const dz = async (q) => {
+      const r = await fetch(`https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=8`, { signal: AbortSignal.timeout(5000) });
+      if (!r.ok) return null;
+      const res = ((await r.json()) || {}).data || [];
+      const best = res.find((x) => x.artist && norm(x.artist.name) === norm(artist) && norm(x.title).includes(titleBase))
+        || res.find((x) => norm(x.title).includes(titleBase))
         || res[0];
-      const art = best && best.artworkUrl100;
-      if (art) url = art.replace('100x100bb', '600x600bb').replace('100x100', '600x600'); // haute résolution
+      return (best && best.album && (best.album.cover_xl || best.album.cover_big)) || null;
+    };
+    url = (await dz(`artist:"${artist}" track:"${title}"`)) || (await dz(track.replace(' - ', ' ')));
+    // 2) repli iTunes.
+    if (!url) {
+      const term = encodeURIComponent(track.replace(' - ', ' '));
+      const r = await fetch(`https://itunes.apple.com/search?term=${term}&entity=song&limit=10`, { signal: AbortSignal.timeout(5000) });
+      if (r.ok) {
+        const res = ((await r.json()) || {}).results || [];
+        const best = res.find((x) => norm(x.artistName).includes(norm(artist)) && norm(x.trackName).includes(titleBase)) || res[0];
+        const art = best && best.artworkUrl100;
+        if (art) url = art.replace('100x100bb', '600x600bb').replace('100x100', '600x600');
+      }
     }
   } catch {}
   coverCache.set(track, url);
   return url;
-}
-
-// Extraction de la VRAIE pochette via l'API média Windows (GlobalSystemMediaTransport
-// Controls) : c'est l'image exacte que Spotify affiche, pas une devinette. WinRT en
-// PowerShell -> on lit le thumbnail de la session Spotify et on l'écrit dans un fichier.
-const COVER_PS = [
-  '$out = $args[0]',
-  'try {',
-  '  Add-Type -AssemblyName System.Runtime.WindowsRuntime',
-  "  $asT = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]",
-  '  function Await($op,$t){ $m=$asT.MakeGenericMethod($t); $k=$m.Invoke($null,@($op)); $k.Wait(-1)|Out-Null; $k.Result }',
-  '  [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager,Windows.Media.Control,ContentType=WindowsRuntime]|Out-Null',
-  '  [Windows.Storage.Streams.DataReader,Windows.Storage.Streams,ContentType=WindowsRuntime]|Out-Null',
-  '  $mgr = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])',
-  '  $sess = $null',
-  "  foreach ($s in $mgr.GetSessions()) { if ($s.SourceAppUserModelId -like '*Spotify*') { $sess = $s; break } }",
-  '  if (-not $sess) { $sess = $mgr.GetCurrentSession() }',
-  '  if ($sess) {',
-  '    $props = Await ($sess.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])',
-  '    if ($props.Thumbnail) {',
-  '      $stream = Await ($props.Thumbnail.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])',
-  '      $size = [uint32]$stream.Size',
-  '      if ($size -gt 0) {',
-  '        $reader = [Windows.Storage.Streams.DataReader]::new($stream)',
-  '        Await ($reader.LoadAsync($size)) ([uint32]) | Out-Null',
-  '        $bytes = New-Object byte[] $size',
-  '        $reader.ReadBytes($bytes)',
-  '        [System.IO.File]::WriteAllBytes($out, $bytes)',
-  '      }',
-  '    }',
-  '  }',
-  '} catch {}',
-].join('\n');
-
-// Écrit la pochette courante dans outPath. Renvoie true si un fichier valide a été créé.
-function fetchLocalCover(outPath) {
-  return new Promise((resolve) => {
-    if (process.platform !== 'win32') return resolve(false);
-    try {
-      const scriptPath = path.join(app.getPath('temp'), 'rloverlay-cover.ps1');
-      try { fs.writeFileSync(scriptPath, COVER_PS); } catch {}
-      try { fs.rmSync(outPath, { force: true }); } catch {}
-      const ps = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, outPath], { windowsHide: true });
-      let done = false;
-      const fin = (v) => { if (done) return; done = true; resolve(v); };
-      ps.on('exit', () => { try { fin(fs.existsSync(outPath) && fs.statSync(outPath).size > 500); } catch { fin(false); } });
-      ps.on('error', () => fin(false));
-      setTimeout(() => { try { ps.kill(); } catch {} fin(false); }, 8000);
-    } catch { resolve(false); }
-  });
 }
 
 function handleSpotify(title) {
@@ -863,17 +823,10 @@ function handleSpotify(title) {
   lastSpotify = np;
   lastCover = null;
   if (overlayVisible) sendUpdate({ spotify: np, cover: null });
-  if (!np) return;
-  // 1) vraie pochette Windows (exacte) ; 2) repli iTunes si indispo.
-  const outPath = path.join(app.getPath('temp'), 'rloverlay-cover.img');
-  fetchLocalCover(outPath).then((ok) => {
-    if (lastSpotify !== np) return; // morceau changé entre-temps
-    if (ok) {
-      lastCover = 'file:///' + outPath.replace(/\\/g, '/') + '?v=' + Date.now(); // ?v= = cache-bust
-      if (overlayVisible) sendUpdate({ cover: lastCover });
-    } else {
-      fetchCover(np).then((url) => { if (lastSpotify === np) { lastCover = url; if (overlayVisible) sendUpdate({ cover: url }); } });
-    }
+  if (np) fetchCover(np).then((url) => {
+    if (lastSpotify !== np) return; // le morceau a changé pendant le fetch -> on ignore
+    lastCover = url;
+    if (overlayVisible) sendUpdate({ cover: url });
   });
 }
 
