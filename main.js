@@ -283,7 +283,7 @@ async function poll(force) {
     const cfg = loadConfig();
     let stats;
     try {
-      stats = await fetchStats(cfg.platform, cfg.username);
+      stats = await fetchStats(cfg.platform, cfg.username, force);
     } catch (e) {
       sendUpdate({ error: 'MMR introuvable (Tracker bloqué ?)' });
       return;
