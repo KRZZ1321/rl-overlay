@@ -733,8 +733,13 @@ function nudge(dx, dy) {
 // Anti burn-in OLED : micro-décalage périodique et imperceptible de l'overlay
 // (un HUD statique marque les dalles OLED). NE persiste PAS la position : on
 // oscille autour de la base et on retire le décalage à l'arrêt.
-const OLED_STEPS = [[0, 0], [1, 0], [2, 1], [1, 2], [0, 2], [-1, 1], [-2, 0], [-1, -1], [0, -2], [1, -1]];
-let oledTimer = null, oledIdx = 0, oledLast = [0, 0];
+// Orbite ~±7px (amplitude renforcée) : répartit l'usure des pixels bien plus qu'un
+// micro-décalage de 2px. Imperceptible en jeu, mais protège mieux les OLED.
+const OLED_STEPS = [
+  [0, 0], [3, -1], [6, 1], [7, 4], [5, 7], [1, 8], [-3, 7], [-6, 5],
+  [-8, 2], [-7, -2], [-4, -5], [-1, -7], [3, -6], [6, -3],
+];
+let oledTimer = null, oledFadeTimer = null, oledIdx = 0, oledLast = [0, 0];
 function oledShiftTick() {
   if (!win || win.isDestroyed()) return;
   const [x, y] = win.getPosition();
@@ -744,16 +749,25 @@ function oledShiftTick() {
   win.setPosition(bx + step[0], by + step[1]);
   oledLast = step;
 }
+// Micro-fade : l'overlay s'estompe ~1s puis revient -> repos périodique des pixels
+// statiques lumineux. Via setOpacity (indépendant du réglage d'opacité CSS).
+function oledFadeOnce() {
+  if (!win || win.isDestroyed() || !overlayVisible) return;
+  const seq = [0.7, 0.45, 0.22, 0.12, 0.22, 0.45, 0.7, 1];
+  seq.forEach((v, i) => setTimeout(() => { if (win && !win.isDestroyed()) win.setOpacity(v); }, i * 130));
+}
 function startOledShift() {
   if (oledTimer) return;
   oledIdx = 0; oledLast = [0, 0];
-  oledTimer = setInterval(oledShiftTick, 60000); // 1 pas / minute
+  oledTimer = setInterval(oledShiftTick, 60000);      // 1 pas d'orbite / minute
+  oledFadeTimer = setInterval(oledFadeOnce, 180000);  // micro-fade toutes les 3 min
 }
 function stopOledShift() {
   if (oledTimer) { clearInterval(oledTimer); oledTimer = null; }
-  if (win && !win.isDestroyed() && (oledLast[0] || oledLast[1])) {
-    const [x, y] = win.getPosition();
-    win.setPosition(x - oledLast[0], y - oledLast[1]); // remet la base
+  if (oledFadeTimer) { clearInterval(oledFadeTimer); oledFadeTimer = null; }
+  if (win && !win.isDestroyed()) {
+    if (oledLast[0] || oledLast[1]) { const [x, y] = win.getPosition(); win.setPosition(x - oledLast[0], y - oledLast[1]); }
+    win.setOpacity(1); // restaure (le réglage d'opacité reste géré en CSS)
   }
   oledLast = [0, 0];
 }
