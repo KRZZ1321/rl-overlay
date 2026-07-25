@@ -784,12 +784,23 @@ async function fetchCover(track) {
   if (coverCache.has(track)) return coverCache.get(track);
   let url = null;
   try {
+    const norm = (s) => String(s || '').toLowerCase().trim();
+    const dash = track.indexOf(' - ');
+    const artist = dash > 0 ? norm(track.slice(0, dash)) : '';
+    const title = dash > 0 ? norm(track.slice(dash + 3)) : norm(track);
+    const titleBase = title.split(' (')[0].split(' - ')[0].trim(); // sans "(feat...)"/remix
     const term = encodeURIComponent(track.replace(' - ', ' '));
-    const r = await fetch(`https://itunes.apple.com/search?term=${term}&entity=song&limit=1`, { signal: AbortSignal.timeout(5000) });
+    const r = await fetch(`https://itunes.apple.com/search?term=${term}&entity=song&limit=10`, { signal: AbortSignal.timeout(5000) });
     if (r.ok) {
       const j = await r.json();
-      const art = j.results && j.results[0] && j.results[0].artworkUrl100;
-      if (art) url = art.replace('100x100bb', '300x300bb').replace('100x100', '300x300'); // résolution supérieure
+      const res = j.results || [];
+      // Meilleur match : artiste + titre exacts, sinon inclusion, sinon 1er résultat.
+      const best = res.find((x) => norm(x.artistName) === artist && norm(x.trackName) === title)
+        || res.find((x) => artist && norm(x.artistName).includes(artist) && norm(x.trackName).includes(titleBase))
+        || res.find((x) => norm(x.trackName).includes(titleBase))
+        || res[0];
+      const art = best && best.artworkUrl100;
+      if (art) url = art.replace('100x100bb', '600x600bb').replace('100x100', '600x600'); // haute résolution
     }
   } catch {}
   coverCache.set(track, url);
