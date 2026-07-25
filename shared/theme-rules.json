@@ -1,0 +1,6 @@
+{
+  "allowedTags": ["Sombre", "Clair", "Néon", "Pastel", "Mono", "Vif", "Chill", "Agressif"],
+  "blockedNameSubstrings": ["fuck", "shit", "nigg", "fag", "rape", "cunt", "kys"],
+  "maxNameLength": 24,
+  "maxTags": 3
+}
