@@ -18,5 +18,15 @@ contextBridge.exposeInMainWorld('hub', {
   saveGoals: (list) => ipcRenderer.invoke('save-goals', list),
   saveTheme: (t) => ipcRenderer.invoke('save-custom-theme', t),
   deleteTheme: (name) => ipcRenderer.invoke('delete-custom-theme', name),
-  applyTheme: (index) => ipcRenderer.invoke('apply-theme', index)
+  applyTheme: (index) => ipcRenderer.invoke('apply-theme', index),
+  workshop: {
+    list: (o) => ipcRenderer.invoke('workshop:list', o),
+    cache: () => ipcRenderer.invoke('workshop:cache'),
+    session: () => ipcRenderer.invoke('workshop:session'),
+    login: () => ipcRenderer.invoke('workshop:login'),
+    logout: () => ipcRenderer.invoke('workshop:logout'),
+    publish: (t) => ipcRenderer.invoke('workshop:publish', t),
+    like: (id, liked) => ipcRenderer.invoke('workshop:like', { id, liked }),
+    install: (id) => ipcRenderer.invoke('workshop:install', { id })
+  }
 });

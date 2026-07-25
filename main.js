@@ -626,6 +626,37 @@ ipcMain.handle('apply-theme', (_e, index) => {
   return { ok: true };
 });
 
+// --- Theme Workshop (galerie communautaire, backend Supabase) ---
+const workshop = require('./workshop-net');
+const wsPure = require('./lib/workshop');
+const WORKSHOP_CACHE = path.join(app.getPath('userData'), 'workshop-cache.json');
+const WORKSHOP_SESSION = path.join(app.getPath('userData'), 'workshop-session.json');
+// Restaure la session Discord au boot (best-effort).
+try { const s = JSON.parse(fs.readFileSync(WORKSHOP_SESSION, 'utf8')); if (s && s.access_token) workshop.setSession(s); } catch {}
+
+ipcMain.handle('workshop:list', async (_e, opts) => {
+  try {
+    const all = await workshop.listThemes();
+    try { fs.writeFileSync(WORKSHOP_CACHE, wsPure.serializeCache(all)); } catch {}
+    let list = wsPure.filterThemes(all, opts || {});
+    list = wsPure.sortThemes(list, (opts && opts.sort) || 'popular');
+    return { ok: true, themes: list };
+  } catch (e) { return { ok: false, error: e.message }; }
+});
+ipcMain.handle('workshop:cache', () => {
+  try { return { themes: wsPure.parseCache(fs.readFileSync(WORKSHOP_CACHE, 'utf8')) }; } catch { return { themes: [] }; }
+});
+ipcMain.handle('workshop:session', () => ({ user: workshop.getUser() }));
+ipcMain.handle('workshop:login', async () => {
+  const r = await workshop.loginDiscord();
+  if (r.ok) { try { fs.writeFileSync(WORKSHOP_SESSION, JSON.stringify({ access_token: workshop._tok(), user: r.user })); } catch {} }
+  return r;
+});
+ipcMain.handle('workshop:logout', () => { workshop.setSession(null); try { fs.rmSync(WORKSHOP_SESSION); } catch {} return { ok: true }; });
+ipcMain.handle('workshop:publish', (_e, t) => workshop.publishTheme(t));
+ipcMain.handle('workshop:like', (_e, a) => workshop.likeTheme(a.id, a.liked));
+ipcMain.handle('workshop:install', (_e, a) => workshop.installTheme(a.id));
+
 // IPC : réglage overlay depuis la page Réglages du Hub.
 // Validation déléguée au module pur lib/settings-flags (bool/num/enum, testé).
 ipcMain.handle('set-overlay-flag', (_e, key, value) => {

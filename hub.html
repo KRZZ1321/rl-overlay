@@ -294,6 +294,32 @@
   #news h2 { font-size: 20px; font-weight: 800; letter-spacing: -.3px; margin-bottom: 2px; }
   #news .nsub { color: var(--muted); font-size: 13px; margin-bottom: 22px; }
   #news .nclose { position: absolute; top: 24px; right: 28px; font-size: 13px; color: var(--muted); cursor: pointer; }
+
+  /* Surcouche Workshop (même pattern que #news) */
+  #workshop { position: fixed; inset: 0; z-index: 72;
+    background: color-mix(in srgb, var(--bg) 90%, transparent); backdrop-filter: blur(6px);
+    padding: 40px 48px; overflow: auto;
+    opacity: 0; visibility: hidden; transform: scale(.985);
+    transition: opacity .2s ease, transform .22s cubic-bezier(.22,1,.36,1), visibility 0s linear .22s; }
+  body.show-workshop #workshop { opacity: 1; visibility: visible; transform: none;
+    transition: opacity .2s ease, transform .22s cubic-bezier(.22,1,.36,1), visibility 0s; }
+  #workshop h2 { font-size: 20px; font-weight: 800; letter-spacing: -.3px; margin-bottom: 2px; }
+  #workshop .wssub { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+  #workshop .wsclose { position: absolute; top: 24px; right: 28px; font-size: 13px; color: var(--muted); cursor: pointer; }
+  .ws-bar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 18px; }
+  .ws-sorts { display: flex; gap: 6px; }
+  .ws-sort { padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; }
+  .ws-sort.on { color: var(--txt); border-color: var(--aA); background: color-mix(in srgb, var(--aA) 14%, transparent); }
+  #ws-search { flex: 1; min-width: 160px; padding: 7px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--txt); }
+  .ws-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 16px; }
+  .ws-tile { border: 1px solid; border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 6px; min-height: 130px; }
+  .ws-tile .ws-mmr { font-size: 30px; font-weight: 800; line-height: 1; }
+  .ws-tile .ws-name { font-weight: 700; font-size: 14px; }
+  .ws-tile .ws-author { font-size: 11px; opacity: .7; }
+  .ws-tile .ws-meta { display: flex; gap: 12px; font-size: 12px; opacity: .85; margin-top: auto; }
+  .ws-tile .ws-like { cursor: pointer; }
+  .ws-tile .ws-apply { margin-top: 8px; padding: 6px; border-radius: 8px; border: none; background: rgba(255,255,255,.14); color: inherit; cursor: pointer; font-weight: 600; }
+  .ws-empty { color: var(--muted); font-size: 14px; padding: 20px 0; }
   #news .nclose:hover { color: var(--txt); }
   #news .release { max-width: 820px; margin: 0 0 26px; }
   #news .rhead { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
@@ -435,6 +461,7 @@
       </div>
     </div>
   </div>
+  <button id="ws-toggle" title="Workshop — galerie de thèmes communautaires">🖼️</button>
   <button id="news-toggle" title="Nouveautés">🎁</button>
   <button id="keys-toggle" title="Raccourcis clavier">?</button>
   <div id="history">
@@ -575,6 +602,22 @@
     <h2>Nouveautés</h2>
     <div class="nsub">Ce qui a changé dans cette version et les précédentes.</div>
     <div id="news-body"></div>
+  </div>
+  <div id="workshop">
+    <span class="wsclose" id="ws-close">✕ Fermer (Échap)</span>
+    <h2>Workshop — thèmes de la communauté</h2>
+    <div class="wssub">Parcours, applique en 1 clic, publie le tien. Aperçu en direct.</div>
+    <div class="ws-bar">
+      <div class="ws-sorts">
+        <button class="ws-sort on" data-sort="popular">Populaires</button>
+        <button class="ws-sort" data-sort="liked">Aimés</button>
+        <button class="ws-sort" data-sort="recent">Récents</button>
+      </div>
+      <input id="ws-search" placeholder="Rechercher un thème…" />
+      <button class="dbtn" id="ws-login">Se connecter (Discord)</button>
+      <button class="dbtn" id="ws-publish" hidden title="Publie le thème ouvert dans l'éditeur (🎨)">Publier mon thème</button>
+    </div>
+    <div id="ws-grid" class="ws-grid"></div>
   </div>
   <div id="keys">
     <span class="kclose" id="keys-close">✕ Fermer (Échap)</span>
@@ -865,6 +908,78 @@
   document.getElementById('keys-close').addEventListener('click', () => document.body.classList.remove('show-keys'));
   document.getElementById('news-toggle').addEventListener('click', () => document.body.classList.toggle('show-news'));
   document.getElementById('news-close').addEventListener('click', () => document.body.classList.remove('show-news'));
+  document.getElementById('ws-toggle').addEventListener('click', () => {
+    const on = document.body.classList.toggle('show-workshop');
+    if (on) wsLoad();
+  });
+  document.getElementById('ws-close').addEventListener('click', () => document.body.classList.remove('show-workshop'));
+  document.getElementById('workshop').addEventListener('click', (e) => { if (e.target.id === 'workshop') document.body.classList.remove('show-workshop'); });
+
+  // ---- Workshop : galerie communautaire (backend Supabase via IPC) ----
+  const wsState = { sort: 'popular', tag: null, q: '' };
+  let wsCurrent = [];
+  function wsEsc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+  function wsTile(t) {
+    const tk = window.themegen.deriveTheme({ aA: t.aA, aB: t.aB, bg: t.bg, txt: t.txt });
+    const el = document.createElement('div');
+    el.className = 'ws-tile';
+    el.style.background = tk.bg; el.style.color = tk.txt; el.style.borderColor = tk.line;
+    el.innerHTML =
+      '<div class="ws-mmr" style="color:' + tk.aA + '">1234</div>' +
+      '<div class="ws-name">' + wsEsc(t.name) + '</div>' +
+      (t.author ? '<div class="ws-author">par ' + wsEsc(t.author) + '</div>' : '') +
+      '<div class="ws-meta"><span>⬇ ' + t.installs + '</span>' +
+      '<span class="ws-like" data-id="' + t.id + '">♥ ' + t.likes + '</span></div>' +
+      '<button class="ws-apply" data-id="' + t.id + '">Appliquer</button>';
+    return el;
+  }
+  function wsRender(themes) {
+    wsCurrent = themes || [];
+    const grid = document.getElementById('ws-grid');
+    grid.innerHTML = '';
+    if (!wsCurrent.length) { grid.innerHTML = '<div class="ws-empty">Aucun thème (ou hors-ligne).</div>'; return; }
+    wsCurrent.forEach((t) => grid.appendChild(wsTile(t)));
+  }
+  async function wsLoad() {
+    const cached = await window.hub.workshop.cache();
+    if (cached.themes && cached.themes.length) wsRender(cached.themes); // paint instantané
+    const r = await window.hub.workshop.list(wsState);
+    if (r.ok) wsRender(r.themes);
+    else if (!(cached.themes && cached.themes.length)) wsRender([]);
+    const s = await window.hub.workshop.session();
+    if (s.user) wsSetLogged(s.user);
+  }
+  function wsSetLogged(user) {
+    const name = (user && user.user_metadata && (user.user_metadata.full_name || user.user_metadata.name)) || 'Connecté';
+    const lb = document.getElementById('ws-login'); lb.textContent = '✓ ' + name; lb.disabled = true;
+    document.getElementById('ws-publish').hidden = false;
+  }
+  document.getElementById('ws-grid').addEventListener('click', async (e) => {
+    const apply = e.target.closest('.ws-apply');
+    if (apply) {
+      const t = wsCurrent.find((x) => x.id === apply.getAttribute('data-id'));
+      if (t) { await window.hub.saveTheme({ name: t.name, aA: t.aA, aB: t.aB, bg: t.bg, txt: t.txt }); window.hub.workshop.install(t.id); apply.textContent = 'Appliqué ✓'; }
+      return;
+    }
+    const like = e.target.closest('.ws-like');
+    if (like) { const r = await window.hub.workshop.like(like.getAttribute('data-id'), true); if (r.ok) like.textContent = like.textContent.replace('♥', '♥+'); else if (r.error === 'auth') alert('Connecte-toi (Discord) pour liker.'); }
+  });
+  document.querySelectorAll('.ws-sort').forEach((b) => b.addEventListener('click', () => {
+    document.querySelectorAll('.ws-sort').forEach((x) => x.classList.remove('on'));
+    b.classList.add('on'); wsState.sort = b.getAttribute('data-sort'); wsLoad();
+  }));
+  document.getElementById('ws-search').addEventListener('input', (e) => { wsState.q = e.target.value; wsLoad(); });
+  document.getElementById('ws-login').addEventListener('click', async () => {
+    const r = await window.hub.workshop.login();
+    if (r.ok) wsSetLogged(r.user); else alert('Connexion Discord échouée : ' + (r.error || '?'));
+  });
+  document.getElementById('ws-publish').addEventListener('click', async () => {
+    const name = (document.getElementById('te-name').value || '').trim();
+    if (!name) { alert('Ouvre l’éditeur de thème (🎨), choisis tes couleurs + un nom, puis reviens publier.'); return; }
+    const t = { name, aA: document.getElementById('te-aA').value, aB: document.getElementById('te-aB').value, bg: document.getElementById('te-bg').value, txt: document.getElementById('te-txt').value, tags: [] };
+    const r = await window.hub.workshop.publish(t);
+    if (r.ok) { alert('Publié ✓'); wsLoad(); } else alert('Publication refusée : ' + (r.error || '?'));
+  });
   // Diagnostic : (re)charge les infos à l'ouverture des Réglages.
   async function refreshDiag() {
     const box = document.getElementById('diag');
@@ -1078,7 +1193,8 @@
     if (e.key !== 'Escape') return;
     // Échap dans un champ (ex. fermer le color picker, saisir le nom) -> ne ferme pas la page.
     if (document.activeElement && document.activeElement.tagName === 'INPUT') return;
-    if (keysOn()) { document.body.classList.remove('show-keys'); }
+    if (document.body.classList.contains('show-workshop')) { document.body.classList.remove('show-workshop'); }
+    else if (keysOn()) { document.body.classList.remove('show-keys'); }
     else if (newsOn()) { document.body.classList.remove('show-news'); }
     else if (goalsOn()) { document.body.classList.remove('show-goals'); }
     else if (settingsOn()) { document.body.classList.remove('show-settings'); }
