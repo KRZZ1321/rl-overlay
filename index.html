@@ -758,7 +758,6 @@
   };
   function rankUp(info) {
     syncFx();                    // recale la boîte FX sur la forme active
-    playRankSound(info.kind);    // son : tier up (fanfare) vs div up (blip)
     const st = RANK_STYLE[info.group] || RANK_STYLE['Gold'];
     const c = $('cel');
     const title = info.kind === 'tier' ? 'RANK UP !' : 'DIV UP !';

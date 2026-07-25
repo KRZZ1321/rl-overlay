@@ -1,6 +1,6 @@
 {
   "name": "rl-overlay",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "description": "Overlay Rocket League (sans injection) : streak, wins/losses de session, MMR",
   "main": "main.js",
   "scripts": {
@@ -40,5 +40,5 @@
       "!matches.json"
     ]
   },
-  "repository": "github:KRZZ2345/rl-overlay"
+  "repository": "github:KRZZ1321/rl-overlay"
 }

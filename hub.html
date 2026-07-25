@@ -479,6 +479,13 @@
     </div>
     <div class="srow">
       <div class="stext">
+        <div class="stitle">Anti burn-in OLED</div>
+        <div class="sdesc">Décale l'overlay de quelques pixels chaque minute (imperceptible) pour éviter le marquage des dalles OLED.</div>
+      </div>
+      <div class="switch" id="sw-oled" role="switch" tabindex="0"></div>
+    </div>
+    <div class="srow">
+      <div class="stext">
         <div class="stitle">Taille de l'overlay</div>
         <div class="sdesc">Agrandit ou réduit l'overlay en jeu.</div>
       </div>
@@ -667,6 +674,8 @@
     if (swStreak && vm._showStreak !== undefined) swStreak.classList.toggle('on', vm._showStreak !== false);
     const swDelta = document.getElementById('sw-delta');
     if (swDelta && vm._showDelta !== undefined) swDelta.classList.toggle('on', vm._showDelta !== false);
+    const swOled = document.getElementById('sw-oled');
+    if (swOled && vm._oledShift !== undefined) swOled.classList.toggle('on', vm._oledShift === true);
     syncSlider('sl-scale', 'sv-scale', vm._overlayScale, '%');
     syncSlider('sl-opacity', 'sv-opacity', vm._overlayOpacity, '%');
     syncSlider('sl-mmrsize', 'sv-mmrsize', vm._mmrSize, '%');
@@ -933,6 +942,7 @@
   bindSwitch('sw-music', 'showMusic');
   bindSwitch('sw-streak', 'showStreak');
   bindSwitch('sw-delta', 'showDelta');
+  bindSwitch('sw-oled', 'oledShift');
   // Sliders : maj du label en direct (input), persiste à la fin du glissement (change).
   let sliderDragging = null;
   function syncSlider(slId, valId, value, suffix) {

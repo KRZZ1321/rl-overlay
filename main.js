@@ -48,7 +48,7 @@ const DEFAULT_CONFIG = {
   username: '',
   playlist: 'ranked-doubles',
   pollSeconds: 15,
-  overlay: { anchor: 'bottom-right', marginX: 320, marginY: 50, x: 20, y: 20, clickThrough: true, theme: 0, layout: 5, tutoSeen: false, lastSeenVersion: null, mmrGlow: true, showMusic: true, overlayScale: 100, overlayOpacity: 100, font: 'default', mmrSize: 100, showStreak: true, showDelta: true, customThemes: [] },
+  overlay: { anchor: 'bottom-right', marginX: 320, marginY: 50, x: 20, y: 20, clickThrough: true, theme: 0, layout: 5, tutoSeen: false, lastSeenVersion: null, mmrGlow: true, showMusic: true, overlayScale: 100, overlayOpacity: 100, font: 'default', mmrSize: 100, showStreak: true, showDelta: true, oledShift: false, customThemes: [] },
   // Discord Rich Presence : affiche MMR/rang live sur ton profil Discord.
   // clientId = "Application ID" d'une app creee sur discord.com/developers
   // (1 min, voir README). Vide = desactive. largeImageKey = cle d'un asset
@@ -406,6 +406,7 @@ function pushHub() {
       _overlayScale: o.overlayScale ?? 100, _overlayOpacity: o.overlayOpacity ?? 100,
       _font: o.font || 'default', _mmrSize: o.mmrSize ?? 100,
       _showStreak: o.showStreak !== false, _showDelta: o.showDelta !== false,
+      _oledShift: o.oledShift === true,
       _live: (lastLive && lastLive.inMatch) ? lastLive : null,
       _mmrLive: lastLiveMmr };
     if (showKeysOnce) { payload._showKeys = true; showKeysOnce = false; }
@@ -518,7 +519,7 @@ ipcMain.handle('get-matches', () => ({
   spark: sparkline(matches.slice(-30).map((m) => m.mmr).filter((n) => n != null)),
 }));
 // Remet les réglages d'affichage à leurs valeurs par défaut.
-const OVERLAY_SETTING_DEFAULTS = { mmrGlow: true, showMusic: true, showStreak: true, showDelta: true, overlayScale: 100, overlayOpacity: 100, font: 'default', mmrSize: 100 };
+const OVERLAY_SETTING_DEFAULTS = { mmrGlow: true, showMusic: true, showStreak: true, showDelta: true, overlayScale: 100, overlayOpacity: 100, font: 'default', mmrSize: 100, oledShift: false };
 ipcMain.handle('reset-overlay-settings', () => {
   const cfg = loadConfig();
   Object.assign(cfg.overlay, OVERLAY_SETTING_DEFAULTS);
@@ -573,6 +574,7 @@ ipcMain.handle('import-config', async () => {
     overlayScale: o.overlayScale ?? 100, overlayOpacity: o.overlayOpacity ?? 100,
     showStreak: o.showStreak !== false, showDelta: o.showDelta !== false,
     font: o.font || 'default', mmrSize: o.mmrSize ?? 100 });
+  refreshOledShift(); // applique l'état anti burn-in importé
   pushHub();
   poll();
   return { ok: true };
@@ -633,6 +635,7 @@ ipcMain.handle('set-overlay-flag', (_e, key, value) => {
   cfg.overlay[key] = r.value;
   saveConfig(cfg);
   sendUpdate({ [key]: r.value }); // applique en direct sur l'overlay
+  if (key === 'oledShift') refreshOledShift(); // démarre/stoppe le micro-décalage
   pushHub();                      // garde la page Réglages en phase
   return true;
 });
@@ -692,8 +695,41 @@ function nudge(dx, dy) {
   win.setPosition(nx, ny);
   const cfg = loadConfig();
   cfg.overlay.anchor = 'free'; // on passe en position absolue mémorisée
-  cfg.overlay.x = nx; cfg.overlay.y = ny;
+  cfg.overlay.x = nx - oledLast[0]; cfg.overlay.y = ny - oledLast[1]; // mémorise la base sans le décalage anti burn-in
   saveConfig(cfg);
+}
+
+// Anti burn-in OLED : micro-décalage périodique et imperceptible de l'overlay
+// (un HUD statique marque les dalles OLED). NE persiste PAS la position : on
+// oscille autour de la base et on retire le décalage à l'arrêt.
+const OLED_STEPS = [[0, 0], [1, 0], [2, 1], [1, 2], [0, 2], [-1, 1], [-2, 0], [-1, -1], [0, -2], [1, -1]];
+let oledTimer = null, oledIdx = 0, oledLast = [0, 0];
+function oledShiftTick() {
+  if (!win || win.isDestroyed()) return;
+  const [x, y] = win.getPosition();
+  const bx = x - oledLast[0], by = y - oledLast[1]; // position de base (sans décalage courant)
+  oledIdx = (oledIdx + 1) % OLED_STEPS.length;
+  const step = OLED_STEPS[oledIdx];
+  win.setPosition(bx + step[0], by + step[1]);
+  oledLast = step;
+}
+function startOledShift() {
+  if (oledTimer) return;
+  oledIdx = 0; oledLast = [0, 0];
+  oledTimer = setInterval(oledShiftTick, 60000); // 1 pas / minute
+}
+function stopOledShift() {
+  if (oledTimer) { clearInterval(oledTimer); oledTimer = null; }
+  if (win && !win.isDestroyed() && (oledLast[0] || oledLast[1])) {
+    const [x, y] = win.getPosition();
+    win.setPosition(x - oledLast[0], y - oledLast[1]); // remet la base
+  }
+  oledLast = [0, 0];
+}
+// Démarre/stoppe selon le réglage + visibilité (pas de décalage hors-jeu).
+function refreshOledShift() {
+  if (loadConfig().overlay.oledShift === true && overlayVisible) startOledShift();
+  else stopOledShift();
 }
 
 // Affiche l'overlay seulement quand Rocket League est la fenêtre au premier plan.
@@ -813,9 +849,11 @@ function setOverlayVisible(v) {
     sendUpdate({ appear: true }); // anim d'apparition côté renderer
     sendUpdate({ spotify: lastSpotify }); // recale la ligne musique à l'affichage
     startPolling();              // reprend le scraping (et refresh immédiat)
+    refreshOledShift();          // anti burn-in : démarre le micro-décalage si activé
   } else {
     win.hide();
     sessionStart = 0; // hors jeu : on arrête le chrono
+    stopOledShift();      // hors jeu : plus de décalage
     stopPolling();        // stoppe poll + ferme la fenêtre Chromium = ~0 perf
     clearPresence();      // hors jeu : on retire l'activité Discord
     maybeAutoApplyUpdate(); // on vient de quitter le jeu -> bon moment pour appliquer un update prêt
@@ -1166,19 +1204,31 @@ function startOverlay() {
 const APPLY_UPDATE_PS = `param([int]$ParentPid,[string]$Staged,[string]$Install,[string]$Exe)
 try { Wait-Process -Id $ParentPid -Timeout 30 -ErrorAction SilentlyContinue } catch {}
 $name = [System.IO.Path]::GetFileNameWithoutExtension($Exe)
+# Attente de sortie propre de TOUS les process de l'app (main + helpers electron
+# GPU/renderer/utility partagent le nom de l'exe et verrouillent exe/DLL/app.asar).
 for ($i = 0; $i -lt 25; $i++) {
   if (-not (Get-Process -Name $name -ErrorAction SilentlyContinue)) { break }
   Start-Sleep -Milliseconds 400
 }
+# Filet de sécurité : si des process traînent (helper electron qui ne meurt pas),
+# on force le kill de ceux lancés depuis le dossier d'install -> libère les locks,
+# sinon robocopy échoue en boucle et on relance l'ANCIENNE version.
+$hangs = @(Get-Process -Name $name -ErrorAction SilentlyContinue |
+  Where-Object { $_.Path -and $_.Path.StartsWith($Install, [System.StringComparison]::OrdinalIgnoreCase) })
+if ($hangs.Count -gt 0) {
+  $hangs | Stop-Process -Force -ErrorAction SilentlyContinue
+  Start-Sleep -Milliseconds 800
+}
 Start-Sleep -Milliseconds 500
 $upd = Split-Path $Staged
 $ok = $false
-for ($r = 0; $r -lt 4; $r++) {
-  robocopy $Staged $Install /MIR /XF "Uninstall *.exe" /NFL /NDL /NJH /NJS /NC /NS | Out-Null
+for ($r = 0; $r -lt 5; $r++) {
+  # /R:2 /W:1 : retry par fichier verrouillé avant d'abandonner la passe.
+  robocopy $Staged $Install /MIR /R:2 /W:1 /XF "Uninstall *.exe" /NFL /NDL /NJH /NJS /NC /NS | Out-Null
   if ($LASTEXITCODE -lt 8) { $ok = $true; break }
-  Start-Sleep -Milliseconds 1000
+  Start-Sleep -Milliseconds 1200
 }
-("swap r=$r exit=$LASTEXITCODE ok=$ok at " + (Get-Date -Format o)) | Out-File -FilePath (Join-Path $upd 'apply.log') -Append -Encoding utf8
+("swap r=$r exit=$LASTEXITCODE ok=$ok killed=" + $hangs.Count + " at " + (Get-Date -Format o)) | Out-File -FilePath (Join-Path $upd 'apply.log') -Append -Encoding utf8
 if ($ok) {
   Remove-Item -Recurse -Force $Staged -ErrorAction SilentlyContinue
   Remove-Item -Force (Join-Path $upd 'pending.json') -ErrorAction SilentlyContinue

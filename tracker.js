@@ -54,7 +54,7 @@ async function primeWindow(w, plat, username) {
     let status = 0;
     try {
       status = await w.webContents.executeJavaScript(
-        `fetch(${JSON.stringify(url)},{headers:{Accept:'application/json'}}).then(r=>r.status).catch(()=>0)`
+        `fetch(${JSON.stringify(url)},{headers:{Accept:'application/json'},cache:'no-store'}).then(r=>r.status).catch(()=>0)`
       );
     } catch { status = 0; }
     if (status === 200) { primed = true; return; }
@@ -67,7 +67,7 @@ async function primeWindow(w, plat, username) {
 async function fetchOnce(w, plat, username) {
   const url = apiUrl(plat, username);
   const script = `(async () => {
-    const r = await fetch(${JSON.stringify(url)}, { headers: { Accept: 'application/json' } });
+    const r = await fetch(${JSON.stringify(url)}, { headers: { Accept: 'application/json' }, cache: 'no-store' });
     if (r.status !== 200) return { __status: r.status };
     const j = await r.json();
     const map = ${JSON.stringify(NAME2KEY)};
