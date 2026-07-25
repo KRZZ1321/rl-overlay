@@ -10,3 +10,9 @@ history.json
 overlay.log
 
 .superpowers/
+
+# Supabase local
+supabase/.branches
+supabase/.temp
+.env
+.env.local
