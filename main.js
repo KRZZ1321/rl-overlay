@@ -1,7 +1,7 @@
 const { app, BrowserWindow, ipcMain, globalShortcut, screen, shell, clipboard, dialog } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const { fetchStats, closeHidden } = require('./tracker');
 const { DiscordRPC } = require('./discord-rpc');
 const { loadHistory, saveHistory } = require('./lib/history-store');
@@ -1320,21 +1320,38 @@ function applyPendingUpdate() {
     // L'install est-elle writable ? (Program Files -> non sans admin)
     let writable = true;
     try { const t = path.join(installDir, '.wtest' + Date.now()); fs.writeFileSync(t, 'x'); fs.unlinkSync(t); } catch { writable = false; }
-    const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', helper,
-      '-ParentPid', String(process.pid), '-Staged', stagedDir, '-Install', installDir, '-Exe', exe];
-    // Un spawn detaché direct de powershell était tué par le Job Object Windows
-    // d'Electron à la fermeture de l'app -> le helper ne tournait jamais (pas
-    // d'apply.log, maj jamais appliquée). On passe par un launcher qui fait
-    // Start-Process : le vrai helper est créé HORS du job (breakaway) et survit.
-    // Échappement PowerShell (''), robuste aux espaces (ex. "RL Overlay.exe").
-    const argList = args.map((a) => "'" + String(a).replace(/'/g, "''") + "'").join(',');
-    const verb = writable ? '' : '-Verb RunAs '; // install protégée -> élévation UAC
-    const child = spawn('powershell.exe', ['-NoProfile', '-Command',
-      `Start-Process powershell.exe ${verb}-WindowStyle Hidden -ArgumentList ${argList}`],
-      { detached: true, stdio: 'ignore', windowsHide: true });
-    child.on('error', (e) => { try { logFocus('spawn helper ERREUR: ' + e.message); } catch {} });
-    child.unref();
-    logFocus(`applyPendingUpdate: helper lancé (${writable ? 'normal' : 'élevé UAC'}), quit pour swap`);
+    // Un spawn detaché de powershell (direct OU via Start-Process launcher) était
+    // TUÉ par le Job Object Windows d'Electron à la fermeture de l'app -> le helper
+    // ne tournait jamais (pas d'apply.log, maj jamais appliquée). Solution fiable :
+    // une TÂCHE PLANIFIÉE. Elle tourne dans le service Task Scheduler, totalement
+    // indépendant du process/job de l'app -> survit forcément à app.quit().
+    const updDir = path.dirname(helper);
+    const runCmd = path.join(updDir, 'run-update.cmd');
+    // .cmd avec tous les args bakés (on écrit le fichier -> quoting maîtrisé, ok espaces).
+    const cmd = '@echo off\r\n'
+      + `powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "${helper}" `
+      + `-ParentPid ${process.pid} -Staged "${stagedDir}" -Install "${installDir}" -Exe "${exe}"\r\n`
+      + 'schtasks /delete /tn "RLOverlayUpdate" /f >nul 2>&1\r\n';
+    fs.writeFileSync(runCmd, cmd);
+    const TN = 'RLOverlayUpdate';
+    // /st est obligatoire pour /sc ONCE mais on déclenche via /run tout de suite.
+    const rl = spawnSync('schtasks', ['/create', '/tn', TN, '/tr', runCmd, '/sc', 'ONCE', '/st', '00:00', '/f'],
+      { windowsHide: true });
+    const rr = spawnSync('schtasks', ['/run', '/tn', TN], { windowsHide: true });
+    if ((rl.status !== 0) || (rr.status !== 0)) {
+      // Repli : ancien spawn detaché (au cas où schtasks indispo/refusé).
+      logFocus('applyPendingUpdate: schtasks a échoué (create=' + rl.status + ' run=' + rr.status + '), repli spawn');
+      const argList = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', helper,
+        '-ParentPid', String(process.pid), '-Staged', stagedDir, '-Install', installDir, '-Exe', exe]
+        .map((a) => "'" + String(a).replace(/'/g, "''") + "'").join(',');
+      const verb = writable ? '' : '-Verb RunAs ';
+      const child = spawn('powershell.exe', ['-NoProfile', '-Command',
+        `Start-Process powershell.exe ${verb}-WindowStyle Hidden -ArgumentList ${argList}`],
+        { detached: true, stdio: 'ignore', windowsHide: true });
+      child.on('error', () => {});
+      child.unref();
+    }
+    logFocus('applyPendingUpdate: tâche planifiée lancée, quit pour swap');
     return true;
   } catch (e) {
     logFocus('applyPendingUpdate error: ' + e.message);

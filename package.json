@@ -1,6 +1,6 @@
 {
   "name": "rl-overlay",
-  "version": "1.5.5",
+  "version": "1.5.6",
   "description": "Overlay Rocket League (sans injection) : streak, wins/losses de session, MMR",
   "main": "main.js",
   "scripts": {
