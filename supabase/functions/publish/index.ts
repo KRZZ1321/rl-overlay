@@ -16,13 +16,17 @@ Deno.serve(async (req) => {
   const v = validateTheme(await req.json().catch(() => ({})));
   if (!v.ok) return json({ error: v.error }, 400);
 
+  // Insert via service_role : les clients n'ont PAS le grant insert sur themes, donc
+  // la publication ne peut passer QUE par ici -> validation + rate-limit non contournables.
+  const admin = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
+
   // Rate limit : 10 thèmes / 24h / user
   const since = new Date(Date.now() - 86400_000).toISOString();
-  const { count } = await supa.from("themes").select("id", { count: "exact", head: true })
+  const { count } = await admin.from("themes").select("id", { count: "exact", head: true })
     .eq("author_id", user.id).gte("created_at", since);
   if ((count ?? 0) >= 10) return json({ error: "rate-limit" }, 429);
 
-  const { data, error } = await supa.from("themes")
+  const { data, error } = await admin.from("themes")
     .insert({ author_id: user.id, ...v.value }).select("id").single();
   if (error) return json({ error: "insert" }, 400);
   return json({ id: data.id }, 201);

@@ -1,4 +1,4 @@
-create function public.recount_likes() returns trigger language plpgsql security definer as $$
+create function public.recount_likes() returns trigger language plpgsql security definer set search_path = '' as $$
 declare tid uuid;
 begin
   tid := coalesce(new.theme_id, old.theme_id);

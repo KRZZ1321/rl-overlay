@@ -62,7 +62,7 @@ create table public.entitlements (
 );
 
 -- Alimente profiles au 1er login (métadonnées Discord)
-create function public.handle_new_user() returns trigger language plpgsql security definer as $$
+create function public.handle_new_user() returns trigger language plpgsql security definer set search_path = '' as $$
 begin
   insert into public.profiles (id, discord_name, avatar_url)
   values (new.id, new.raw_user_meta_data->>'full_name', new.raw_user_meta_data->>'avatar_url')

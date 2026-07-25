@@ -7,6 +7,8 @@ alter table public.entitlements enable row level security;
 
 -- profiles : lecture publique, écriture de son propre profil
 create policy profiles_read on public.profiles for select using (true);
+-- MAJ de son profil, mais PAS de is_banned : le grant colonne ci-dessous empêche
+-- un banni de se dé-bannir (Postgres refuse l'écriture d'une colonne non grantée).
 create policy profiles_self_update on public.profiles for update using (auth.uid() = id);
 
 -- themes : lecture des thèmes 'live' ; insertion par l'auteur ; suppression par l'auteur.
@@ -32,9 +34,13 @@ create policy reports_insert on public.reports for insert with check (auth.uid()
 -- (service_role uniquement, qui bypass RLS).
 grant usage on schema public to anon, authenticated;
 grant select on public.profiles to anon, authenticated;
-grant update on public.profiles to authenticated;
+-- update colonne-level : jamais is_banned (anti dé-bannissement) ni les autres colonnes système.
+grant update (discord_name, avatar_url) on public.profiles to authenticated;
 grant select on public.themes to anon, authenticated;
-grant insert, delete on public.themes to authenticated;
+-- PAS d'insert client sur themes : la publication passe UNIQUEMENT par l'Edge Function
+-- publish (service_role) qui applique validation nom/hex/tags + rate-limit. Un insert
+-- direct PostgREST contournerait tout ça. delete own = OK (policy themes_delete_own).
+grant delete on public.themes to authenticated;
 grant select on public.likes to anon, authenticated;
 grant insert, delete on public.likes to authenticated;
 grant insert on public.reports to authenticated;
