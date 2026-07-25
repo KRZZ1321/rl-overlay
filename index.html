@@ -385,7 +385,7 @@
   const state = {
     mmr: null, playlist: '2v2', rankTier: null, rankDiv: null, rankIcon: null,
     startMmr: null, wins: 0, losses: 0, streak: 0, gameStreak: null,
-    goals: null, saves: null, spotify: null, cover: null,
+    goals: null, saves: null, spotify: null, cover: null, mmrLive: null,
     // Form Premium (f5) — view-model dérivé (Plan 2).
     promoPct: 0, promoMatches: 0, momResults: [], boost: 0, sessionMs: 0, hot: false
   };
@@ -586,7 +586,11 @@
     const s = state;
 
     setText('pl', s.playlist || '2v2');
-    setText('mmr', s.mmr == null ? '—' : s.mmr);
+    // MMR affiché : priorité au calcul depuis le log RL (instantané, pas de lag
+    // tracker.gg) UNE FOIS la calibration confirmée ; sinon repli tracker (précis).
+    const useLive = s.mmrLive && s.mmrLive.mmr != null && !s.mmrLive.assumed;
+    const effMmr = useLive ? s.mmrLive.mmr : s.mmr;
+    setText('mmr', effMmr == null ? '—' : effMmr);
 
     const rankTxt = s.rankTier
       ? (s.rankDiv ? s.rankTier + ' · ' + s.rankDiv.replace('Division', 'Div') : s.rankTier)
@@ -850,6 +854,7 @@
       state.playlist = d.playlist;
     }
     if (d.mmr != null) state.mmr = d.mmr;
+    if (d.mmrLive !== undefined) state.mmrLive = d.mmrLive; // MMR calculé depuis le log RL (instantané)
     if (d.startMmr !== undefined) state.startMmr = d.startMmr;
     if (d.rankTier !== undefined) state.rankTier = d.rankTier;
     if (d.rankDiv !== undefined) state.rankDiv = d.rankDiv;
