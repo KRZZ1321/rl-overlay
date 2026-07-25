@@ -866,7 +866,7 @@ function maybeAutoApplyUpdate() {
   if (!updateStaged) return;
   if (overlayVisible) return;                      // en partie -> on attend
   if (hubWin && !hubWin.isDestroyed()) return;     // Hub ouvert -> on attend sa fermeture
-  if (applyPendingUpdate()) { updateStaged = false; app.quit(); }
+  if (applyPendingUpdate()) { updateStaged = false; setTimeout(() => app.quit(), 900); } // délai : laisse le launcher lancer le helper avant qu'on quitte
 }
 
 function setOverlayVisible(v) {
@@ -1296,16 +1296,17 @@ function applyPendingUpdate() {
     try { const t = path.join(installDir, '.wtest' + Date.now()); fs.writeFileSync(t, 'x'); fs.unlinkSync(t); } catch { writable = false; }
     const args = ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', helper,
       '-ParentPid', String(process.pid), '-Staged', stagedDir, '-Install', installDir, '-Exe', exe];
-    let child;
-    if (writable) {
-      child = spawn('powershell.exe', args, { detached: true, stdio: 'ignore' });
-    } else {
-      // Install protégée (Program Files) : relance le helper ÉLEVÉ (UAC) pour
-      // que robocopy puisse écrire. Sinon le swap échouerait en boucle.
-      const argList = args.map((a) => "'" + String(a).replace(/'/g, "''") + "'").join(',');
-      child = spawn('powershell.exe', ['-NoProfile', '-Command',
-        `Start-Process powershell.exe -Verb RunAs -WindowStyle Hidden -ArgumentList ${argList}`], { detached: true, stdio: 'ignore' });
-    }
+    // Un spawn detaché direct de powershell était tué par le Job Object Windows
+    // d'Electron à la fermeture de l'app -> le helper ne tournait jamais (pas
+    // d'apply.log, maj jamais appliquée). On passe par un launcher qui fait
+    // Start-Process : le vrai helper est créé HORS du job (breakaway) et survit.
+    // Échappement PowerShell (''), robuste aux espaces (ex. "RL Overlay.exe").
+    const argList = args.map((a) => "'" + String(a).replace(/'/g, "''") + "'").join(',');
+    const verb = writable ? '' : '-Verb RunAs '; // install protégée -> élévation UAC
+    const child = spawn('powershell.exe', ['-NoProfile', '-Command',
+      `Start-Process powershell.exe ${verb}-WindowStyle Hidden -ArgumentList ${argList}`],
+      { detached: true, stdio: 'ignore', windowsHide: true });
+    child.on('error', (e) => { try { logFocus('spawn helper ERREUR: ' + e.message); } catch {} });
     child.unref();
     logFocus(`applyPendingUpdate: helper lancé (${writable ? 'normal' : 'élevé UAC'}), quit pour swap`);
     return true;
@@ -1322,7 +1323,7 @@ if (!app.requestSingleInstanceLock()) {
 
 app.whenReady().then(() => {
   // Avant tout : si un update est prêt, on le pose et on quitte (l'helper relance).
-  if (applyPendingUpdate()) { app.quit(); return; }
+  if (applyPendingUpdate()) { setTimeout(() => app.quit(), 900); return; } // délai : le helper doit démarrer avant qu'on quitte
   // Lancement auto au démarrage de Windows (overlay toujours dispo en fond).
   if (process.platform === 'win32' && app.isPackaged) {
     app.setLoginItemSettings({ openAtLogin: true });
