@@ -349,10 +349,15 @@
   /* Ligne "musique en cours" (titre Spotify), intégrée dans chaque forme.
      Affichée seulement quand une musique joue (sinon display:none via paint). */
   .np {
-    display: none; margin: 5px 2px 0;
+    display: none; margin: 5px 2px 0; align-items: center; gap: 6px;
     color: var(--accent); font-size: 12px; font-weight: 600;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; overflow: hidden;
     text-shadow: 0 1px 2px rgba(0,0,0,0.95), 0 0 6px rgba(0,0,0,0.7);
+  }
+  .np .np-txt { overflow: hidden; text-overflow: ellipsis; }
+  .np-cover {
+    width: 22px; height: 22px; border-radius: 4px; flex: 0 0 auto; object-fit: cover;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.6);
   }
   /* Variante pour la forme Boost (anneau) : chip flottante en bas. */
   .f4 .np {
@@ -380,7 +385,7 @@
   const state = {
     mmr: null, playlist: '2v2', rankTier: null, rankDiv: null, rankIcon: null,
     startMmr: null, wins: 0, losses: 0, streak: 0, gameStreak: null,
-    goals: null, saves: null, spotify: null,
+    goals: null, saves: null, spotify: null, cover: null,
     // Form Premium (f5) — view-model dérivé (Plan 2).
     promoPct: 0, promoMatches: 0, momResults: [], boost: 0, sessionMs: 0, hot: false
   };
@@ -621,10 +626,14 @@
     setText('goals', s.goals ?? 0);
     setText('saves', s.saves ?? 0);
 
-    // Musique en cours (titre Spotify) : affichée seulement si une piste joue.
+    // Musique en cours (titre Spotify + pochette) : affichée seulement si une piste joue.
     q('np').forEach((e) => {
-      if (s.spotify && showMusic) { e.textContent = '🎵 ' + s.spotify.replace(' - ', ' – '); e.style.display = 'block'; }
-      else e.style.display = 'none';
+      if (s.spotify && showMusic) {
+        const label = s.spotify.replace(' - ', ' – ');
+        const cov = s.cover ? '<img class="np-cover" src="' + s.cover + '" alt="">' : '🎵 ';
+        e.innerHTML = cov + '<span class="np-txt">' + label.replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])) + '</span>';
+        e.style.display = 'flex';
+      } else e.style.display = 'none';
     });
 
     // Streak : in-game (API) si dispo, sinon session (delta MMR).
@@ -830,7 +839,8 @@
     if (d.appear) playAppear();
     if (d.celebrate) celebrate('win');
     if (d.playLoss) playLossSound();   // hotkey Ctrl+Alt+E : test easter egg
-    if (d.spotify !== undefined) state.spotify = d.spotify;
+    if (d.spotify !== undefined) { state.spotify = d.spotify; if (d.cover === undefined) state.cover = null; }
+    if (d.cover !== undefined) state.cover = d.cover;
     if (d.error) { showErr(d.error); return; }
     hideErr();
 

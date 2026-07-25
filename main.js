@@ -776,11 +776,37 @@ let lastSpotify = null;
 // Reçoit le titre brut de la fenêtre Spotify. Un vrai morceau contient " - "
 // (Artiste - Titre) ; "Spotify" seul = pausé/arrêté -> null. On ne pousse au
 // renderer qu'en jeu (overlay visible) et seulement si la valeur a changé.
+let lastCover = null;               // URL pochette du morceau courant (null si aucune)
+const coverCache = new Map();       // "Artiste - Titre" -> URL|null (évite de re-fetch)
+
+// Pochette via l'API publique iTunes Search (gratuite, sans clé, no-injection).
+async function fetchCover(track) {
+  if (coverCache.has(track)) return coverCache.get(track);
+  let url = null;
+  try {
+    const term = encodeURIComponent(track.replace(' - ', ' '));
+    const r = await fetch(`https://itunes.apple.com/search?term=${term}&entity=song&limit=1`, { signal: AbortSignal.timeout(5000) });
+    if (r.ok) {
+      const j = await r.json();
+      const art = j.results && j.results[0] && j.results[0].artworkUrl100;
+      if (art) url = art.replace('100x100bb', '300x300bb').replace('100x100', '300x300'); // résolution supérieure
+    }
+  } catch {}
+  coverCache.set(track, url);
+  return url;
+}
+
 function handleSpotify(title) {
   const np = title && title.includes(' - ') ? title : null;
   if (np === lastSpotify) return;
   lastSpotify = np;
-  if (overlayVisible) sendUpdate({ spotify: np });
+  lastCover = null;
+  if (overlayVisible) sendUpdate({ spotify: np, cover: null });
+  if (np) fetchCover(np).then((url) => {
+    if (lastSpotify !== np) return; // le morceau a changé pendant le fetch -> on ignore
+    lastCover = url;
+    if (overlayVisible) sendUpdate({ cover: url });
+  });
 }
 
 // Log debug dans userData/overlay.log (sert à diagnostiquer "visible partout").
@@ -878,7 +904,7 @@ function setOverlayVisible(v) {
     win.showInactive();          // montre SANS voler le focus au jeu
     if (!sessionStart) sessionStart = Date.now(); // démarre le chrono de session
     sendUpdate({ appear: true }); // anim d'apparition côté renderer
-    sendUpdate({ spotify: lastSpotify }); // recale la ligne musique à l'affichage
+    sendUpdate({ spotify: lastSpotify, cover: lastCover }); // recale la ligne musique + pochette à l'affichage
     startPolling();              // reprend le scraping (et refresh immédiat)
     refreshOledShift();          // anti burn-in : démarre le micro-décalage si activé
   } else {
