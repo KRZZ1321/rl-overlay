@@ -807,16 +807,73 @@ async function fetchCover(track) {
   return url;
 }
 
+// Extraction de la VRAIE pochette via l'API média Windows (GlobalSystemMediaTransport
+// Controls) : c'est l'image exacte que Spotify affiche, pas une devinette. WinRT en
+// PowerShell -> on lit le thumbnail de la session Spotify et on l'écrit dans un fichier.
+const COVER_PS = [
+  '$out = $args[0]',
+  'try {',
+  '  Add-Type -AssemblyName System.Runtime.WindowsRuntime',
+  "  $asT = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]",
+  '  function Await($op,$t){ $m=$asT.MakeGenericMethod($t); $k=$m.Invoke($null,@($op)); $k.Wait(-1)|Out-Null; $k.Result }',
+  '  [Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager,Windows.Media.Control,ContentType=WindowsRuntime]|Out-Null',
+  '  [Windows.Storage.Streams.DataReader,Windows.Storage.Streams,ContentType=WindowsRuntime]|Out-Null',
+  '  $mgr = Await ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager]::RequestAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionManager])',
+  '  $sess = $null',
+  "  foreach ($s in $mgr.GetSessions()) { if ($s.SourceAppUserModelId -like '*Spotify*') { $sess = $s; break } }",
+  '  if (-not $sess) { $sess = $mgr.GetCurrentSession() }',
+  '  if ($sess) {',
+  '    $props = Await ($sess.TryGetMediaPropertiesAsync()) ([Windows.Media.Control.GlobalSystemMediaTransportControlsSessionMediaProperties])',
+  '    if ($props.Thumbnail) {',
+  '      $stream = Await ($props.Thumbnail.OpenReadAsync()) ([Windows.Storage.Streams.IRandomAccessStreamWithContentType])',
+  '      $size = [uint32]$stream.Size',
+  '      if ($size -gt 0) {',
+  '        $reader = [Windows.Storage.Streams.DataReader]::new($stream)',
+  '        Await ($reader.LoadAsync($size)) ([uint32]) | Out-Null',
+  '        $bytes = New-Object byte[] $size',
+  '        $reader.ReadBytes($bytes)',
+  '        [System.IO.File]::WriteAllBytes($out, $bytes)',
+  '      }',
+  '    }',
+  '  }',
+  '} catch {}',
+].join('\n');
+
+// Écrit la pochette courante dans outPath. Renvoie true si un fichier valide a été créé.
+function fetchLocalCover(outPath) {
+  return new Promise((resolve) => {
+    if (process.platform !== 'win32') return resolve(false);
+    try {
+      const scriptPath = path.join(app.getPath('temp'), 'rloverlay-cover.ps1');
+      try { fs.writeFileSync(scriptPath, COVER_PS); } catch {}
+      try { fs.rmSync(outPath, { force: true }); } catch {}
+      const ps = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', scriptPath, outPath], { windowsHide: true });
+      let done = false;
+      const fin = (v) => { if (done) return; done = true; resolve(v); };
+      ps.on('exit', () => { try { fin(fs.existsSync(outPath) && fs.statSync(outPath).size > 500); } catch { fin(false); } });
+      ps.on('error', () => fin(false));
+      setTimeout(() => { try { ps.kill(); } catch {} fin(false); }, 8000);
+    } catch { resolve(false); }
+  });
+}
+
 function handleSpotify(title) {
   const np = title && title.includes(' - ') ? title : null;
   if (np === lastSpotify) return;
   lastSpotify = np;
   lastCover = null;
   if (overlayVisible) sendUpdate({ spotify: np, cover: null });
-  if (np) fetchCover(np).then((url) => {
-    if (lastSpotify !== np) return; // le morceau a changé pendant le fetch -> on ignore
-    lastCover = url;
-    if (overlayVisible) sendUpdate({ cover: url });
+  if (!np) return;
+  // 1) vraie pochette Windows (exacte) ; 2) repli iTunes si indispo.
+  const outPath = path.join(app.getPath('temp'), 'rloverlay-cover.img');
+  fetchLocalCover(outPath).then((ok) => {
+    if (lastSpotify !== np) return; // morceau changé entre-temps
+    if (ok) {
+      lastCover = 'file:///' + outPath.replace(/\\/g, '/') + '?v=' + Date.now(); // ?v= = cache-bust
+      if (overlayVisible) sendUpdate({ cover: lastCover });
+    } else {
+      fetchCover(np).then((url) => { if (lastSpotify === np) { lastCover = url; if (overlayVisible) sendUpdate({ cover: url }); } });
+    }
   });
 }
 
